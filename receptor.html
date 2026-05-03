@@ -19,25 +19,21 @@
   --text:#e2e8f0;--muted:#64748b;
   --font:'Space Grotesk',sans-serif;
 }
-html{width:100%;height:100%;background:#000;overflow:hidden}
-body{
+html,body{
   width:100%;height:100%;background:#000;
-  font-family:var(--font);color:var(--text);overflow:hidden;
-  -webkit-tap-highlight-color:transparent;touch-action:manipulation;
-  padding-top:env(safe-area-inset-top);
-  padding-bottom:env(safe-area-inset-bottom);
-  padding-left:env(safe-area-inset-left);
-  padding-right:env(safe-area-inset-right);
+  font-family:var(--font);color:var(--text);
+  overflow:hidden;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
 }
 
-/* ── PANTALLAS ── */
 .screen{
   position:fixed;inset:0;
   display:flex;flex-direction:column;
   align-items:center;justify-content:center;
   transition:opacity .4s;z-index:5;
 }
-.screen.hidden{opacity:0;pointer-events:none}
+.screen.hidden{opacity:0;pointer-events:none;z-index:0}
 
 /* ── CONECTANDO ── */
 #screen-connecting{gap:20px;background:var(--bg)}
@@ -57,20 +53,18 @@ body{
 }
 @keyframes spin{to{transform:rotate(360deg)}}
 .connect-msg{font-size:14px;color:var(--muted);text-align:center;max-width:260px;line-height:1.6}
-.connect-sub{font-size:11px;color:#1e2736;margin-top:4px;font-family:monospace}
+.connect-sub{font-size:11px;color:#475569;margin-top:4px;font-family:monospace;text-align:center}
 
 /* ── EN VIVO ── */
-#screen-live{background:#000;padding:0;z-index:1}
+#screen-live{background:#000;padding:0;z-index:2}
 
-/* VIDEO: ocupa TODO el viewport, sin bordes ni barras */
 #remote-video{
   position:fixed;inset:0;
   width:100%;height:100%;
-  object-fit:contain;   /* Muestra todo el contenido sin recortar */
+  object-fit:contain;
   background:#000;
   z-index:1;display:block;
 }
-/* Modo LLENAR: recorta para que no haya franjas negras */
 #screen-live.fill-mode #remote-video{object-fit:cover}
 
 /* ── BARRA SUPERIOR ── */
@@ -99,7 +93,6 @@ body{
   padding:5px 12px;border-radius:99px;
   font-size:10px;font-weight:700;letter-spacing:.09em;
   box-shadow:0 2px 10px rgba(239,68,68,.4);
-  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
 }
 .live-dot{width:7px;height:7px;border-radius:50%;background:#fff;animation:blink .85s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
@@ -115,7 +108,6 @@ body{
 }
 #bottom-bar.hide{opacity:0;transform:translateY(100%);pointer-events:none}
 
-/* Botones flotantes circulares */
 .fab-wrap{display:flex;flex-direction:column;align-items:center;gap:5px}
 .fab{
   width:50px;height:50px;border-radius:50%;
@@ -133,7 +125,6 @@ body{
   border-color:rgba(37,99,235,.5);
   box-shadow:0 0 22px var(--primary-glow);
 }
-.fab.primary:active{background:rgba(29,78,216,.95)}
 .fab svg{width:20px;height:20px;pointer-events:none}
 .fab-lbl{font-size:9px;color:rgba(255,255,255,.5);letter-spacing:.05em;text-align:center}
 
@@ -153,35 +144,47 @@ body{
 
 /* ── TOAST ── */
 #toast{
-  position:fixed;bottom:90px;left:50%;
+  position:fixed;bottom:100px;left:50%;
   transform:translateX(-50%) translateY(6px);
   background:rgba(30,39,54,.95);border:1px solid var(--border2);
   color:var(--text);border-radius:12px;padding:10px 22px;
-  font-size:12px;font-weight:500;z-index:100;pointer-events:none;
+  font-size:12px;font-weight:500;z-index:200;pointer-events:none;
   opacity:0;white-space:nowrap;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  backdrop-filter:blur(10px);
   box-shadow:0 8px 32px rgba(0,0,0,.6);
   transition:opacity .25s,transform .25s;
 }
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* ── OVERLAY PLAY ── */
+/* ── OVERLAY PLAY (autoplay bloqueado) ── */
 #play-overlay{
   position:fixed;inset:0;
-  background:rgba(0,0,0,.78);
+  background:rgba(0,0,0,.82);
   display:flex;flex-direction:column;
   align-items:center;justify-content:center;
-  z-index:50;cursor:pointer;gap:16px;
+  z-index:100;cursor:pointer;gap:16px;
 }
 .play-icon{
-  width:80px;height:80px;border-radius:50%;
-  background:rgba(37,99,235,.85);
+  width:88px;height:88px;border-radius:50%;
+  background:rgba(37,99,235,.9);
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 0 40px var(--primary-glow);
+  box-shadow:0 0 50px var(--primary-glow);
   animation:pulse 2s ease-in-out infinite;
 }
-@keyframes pulse{0%,100%{box-shadow:0 0 28px var(--primary-glow)}50%{box-shadow:0 0 56px var(--primary-glow)}}
-#play-overlay p{color:rgba(255,255,255,.85);font-size:15px;font-weight:600}
+@keyframes pulse{0%,100%{box-shadow:0 0 30px var(--primary-glow)}50%{box-shadow:0 0 60px var(--primary-glow)}}
+.play-txt{color:rgba(255,255,255,.9);font-size:16px;font-weight:600;text-align:center;padding:0 40px}
+
+/* ── RECONECTANDO ── */
+#reconnect-bar{
+  position:fixed;top:max(env(safe-area-inset-top),10px);
+  left:50%;transform:translateX(-50%);
+  background:rgba(249,115,22,.9);
+  color:#fff;font-size:11px;font-weight:700;
+  padding:6px 16px;border-radius:99px;
+  z-index:300;display:none;
+  box-shadow:0 2px 12px rgba(249,115,22,.4);
+}
+#reconnect-bar.on{display:block}
 </style>
 </head>
 <body>
@@ -205,11 +208,8 @@ body{
 
 <!-- ══ EN VIVO ══ -->
 <div class="screen hidden" id="screen-live">
+  <video id="remote-video" autoplay playsinline muted></video>
 
-  <!-- Video a pantalla completa -->
-  <video id="remote-video" autoplay playsinline></video>
-
-  <!-- Barra superior -->
   <div id="top-bar">
     <div class="top-logo">
       <div class="top-logo-icon">
@@ -225,47 +225,51 @@ body{
     <div class="live-pill"><div class="live-dot"></div>EN VIVO</div>
   </div>
 
-  <!-- Barra inferior: controles -->
   <div id="bottom-bar">
-
     <!-- Ajustar / Llenar -->
     <div class="fab-wrap">
-      <button class="fab" id="btn-fit" onclick="toggleFit()" title="Ajustar / Llenar">
+      <button class="fab" id="btn-fit" onclick="toggleFit()">
         <svg id="fit-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 3 21 3 21 9"/>
-          <polyline points="9 21 3 21 3 15"/>
-          <line x1="21" y1="3" x2="14" y2="10"/>
-          <line x1="3" y1="21" x2="10" y2="14"/>
+          <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+          <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
         </svg>
         <svg id="fit-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
-          <polyline points="4 14 10 14 10 20"/>
-          <polyline points="20 10 14 10 14 4"/>
-          <line x1="10" y1="14" x2="3" y2="21"/>
-          <line x1="21" y1="3" x2="14" y2="10"/>
+          <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
+          <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
         </svg>
       </button>
       <div class="fab-lbl" id="fit-lbl">LLENAR</div>
     </div>
 
+    <!-- Activar audio (unmute) -->
+    <div class="fab-wrap">
+      <button class="fab" id="btn-audio" onclick="toggleAudio()">
+        <svg id="audio-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>
+        </svg>
+        <svg id="audio-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
+        </svg>
+      </button>
+      <div class="fab-lbl" id="audio-lbl">AUDIO</div>
+    </div>
+
     <!-- Pantalla completa -->
     <div class="fab-wrap">
-      <button class="fab primary" onclick="toggleFullscreen()" title="Pantalla completa">
+      <button class="fab primary" onclick="toggleFullscreen()">
         <svg id="fs-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M8 3H5a2 2 0 00-2 2v3"/>
-          <path d="M21 8V5a2 2 0 00-2-2h-3"/>
-          <path d="M3 16v3a2 2 0 002 2h3"/>
-          <path d="M16 21h3a2 2 0 002-2v-3"/>
+          <path d="M8 3H5a2 2 0 00-2 2v3"/><path d="M21 8V5a2 2 0 00-2-2h-3"/>
+          <path d="M3 16v3a2 2 0 002 2h3"/><path d="M16 21h3a2 2 0 002-2v-3"/>
         </svg>
-        <svg id="fs-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
-          <path d="M8 3v3a2 2 0 01-2 2H3"/>
-          <path d="M21 8h-3a2 2 0 01-2-2V3"/>
-          <path d="M3 16h3a2 2 0 012 2v3"/>
-          <path d="M16 21v-3a2 2 0 012-2h3"/>
+        <svg id="fs-exit-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+          <path d="M8 3v3a2 2 0 01-2 2H3"/><path d="M21 8h-3a2 2 0 01-2-2V3"/>
+          <path d="M3 16h3a2 2 0 012 2v3"/><path d="M16 21v-3a2 2 0 012-2h3"/>
         </svg>
       </button>
       <div class="fab-lbl" id="fs-lbl">COMPLETA</div>
     </div>
-
   </div>
 </div>
 
@@ -277,19 +281,31 @@ body{
   <button class="retry-btn" onclick="location.reload()">Reintentar</button>
 </div>
 
+<!-- Barra de reconexión -->
+<div id="reconnect-bar">⟳ Reconectando...</div>
+
 <div id="toast"></div>
 
 <script>
 var params  = new URLSearchParams(window.location.search);
 var HOST_ID = params.get('host') || '';
 var MY_NAME = params.get('name') || 'Cliente';
-var peer=null, dataConn=null;
-var isFill=false, ctrlsVisible=true, hideTimer=null;
+
+var peer       = null;
+var dataConn   = null;
+var activeCall = null;
+var isFill     = false;
+var isMuted    = true;   // empieza muted para permitir autoplay
+var ctrlsVisible = true;
+var hideTimer  = null;
+var reconnectTimer = null;
+var intentos   = 0;
 
 // ── PANTALLAS ────────────────────────────────────────────────
 function show(id){
   ['screen-connecting','screen-live','screen-error'].forEach(function(s){
-    document.getElementById(s).classList.toggle('hidden', s!==id);
+    var el = document.getElementById(s);
+    el.classList.toggle('hidden', s !== id);
   });
 }
 
@@ -297,145 +313,243 @@ function show(id){
 function showCtrl(){
   document.getElementById('top-bar').classList.remove('hide');
   document.getElementById('bottom-bar').classList.remove('hide');
-  ctrlsVisible=true;
+  ctrlsVisible = true;
   clearTimeout(hideTimer);
-  hideTimer=setTimeout(hideCtrl, 3500);
+  hideTimer = setTimeout(hideCtrl, 4000);
 }
 function hideCtrl(){
   document.getElementById('top-bar').classList.add('hide');
   document.getElementById('bottom-bar').classList.add('hide');
-  ctrlsVisible=false;
+  ctrlsVisible = false;
 }
-document.addEventListener('click',function(e){
+document.addEventListener('click', function(e){
   if(document.getElementById('screen-live').classList.contains('hidden')) return;
   if(e.target.closest('.fab')) return;
   ctrlsVisible ? hideCtrl() : showCtrl();
 });
-document.addEventListener('mousemove',function(){
+document.addEventListener('touchstart', function(){
   if(!document.getElementById('screen-live').classList.contains('hidden')) showCtrl();
-});
-document.addEventListener('touchstart',function(){
-  if(!document.getElementById('screen-live').classList.contains('hidden')) showCtrl();
-},{passive:true});
+}, {passive:true});
 
 // ── FULLSCREEN ───────────────────────────────────────────────
 function toggleFullscreen(){
-  var inFS=!!(document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement);
-  inFS ? doExitFS() : doEnterFS();
+  var inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  inFS ? salirFS() : entrarFS();
 }
-function doEnterFS(){
-  var el=document.documentElement;
-  if(el.requestFullscreen)            el.requestFullscreen({navigationUI:'hide'});
-  else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
-  else if(el.mozRequestFullScreen)    el.mozRequestFullScreen();
-  else if(el.msRequestFullscreen)     el.msRequestFullscreen();
-  else{ iosFS(true); updateFS(true); toast('Pantalla completa'); return; }
-  try{ screen.orientation&&screen.orientation.lock&&screen.orientation.lock('landscape').catch(function(){}); }catch(e){}
+function entrarFS(){
+  var el = document.documentElement;
+  if(el.requestFullscreen) el.requestFullscreen({navigationUI:'hide'});
+  else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  try{ screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(function(){}); }catch(e){}
 }
-function doExitFS(){
-  if(document.exitFullscreen)            document.exitFullscreen();
+function salirFS(){
+  if(document.exitFullscreen) document.exitFullscreen();
   else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
-  else if(document.mozCancelFullScreen)  document.mozCancelFullScreen();
-  else if(document.msExitFullscreen)     document.msExitFullscreen();
-  else{ iosFS(false); updateFS(false); return; }
-  try{ screen.orientation&&screen.orientation.unlock&&screen.orientation.unlock(); }catch(e){}
 }
-function iosFS(on){
-  // iOS Safari: simular pantalla completa via CSS position:fixed
-  document.body.style.position=on?'fixed':'';
-  document.body.style.inset=on?'0':'';
-  document.documentElement.style.background='#000';
-}
-function updateFS(isFS){
-  document.getElementById('fs-enter').style.display=isFS?'none':'block';
-  document.getElementById('fs-exit').style.display=isFS?'block':'none';
-  document.getElementById('fs-lbl').textContent=isFS?'SALIR':'COMPLETA';
-}
-['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange'].forEach(function(ev){
-  document.addEventListener(ev,function(){
-    var isFS=!!(document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement);
-    updateFS(isFS);
+['fullscreenchange','webkitfullscreenchange'].forEach(function(ev){
+  document.addEventListener(ev, function(){
+    var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    document.getElementById('fs-enter').style.display   = isFS ? 'none'  : 'block';
+    document.getElementById('fs-exit-ico').style.display = isFS ? 'block' : 'none';
+    document.getElementById('fs-lbl').textContent = isFS ? 'SALIR' : 'COMPLETA';
   });
-});
-document.addEventListener('keydown',function(e){
-  if(e.key==='f'||e.key==='F'||e.key==='F11'){ e.preventDefault(); toggleFullscreen(); }
-  if(e.key==='Escape') updateFS(false);
 });
 
 // ── AJUSTE IMAGEN ────────────────────────────────────────────
 function toggleFit(){
-  isFill=!isFill;
-  document.getElementById('screen-live').classList.toggle('fill-mode',isFill);
-  document.getElementById('fit-out').style.display=isFill?'none':'block';
-  document.getElementById('fit-in').style.display=isFill?'block':'none';
-  document.getElementById('fit-lbl').textContent=isFill?'AJUSTAR':'LLENAR';
-  toast(isFill?'Modo Llenar (sin franjas negras)':'Modo Ajustar (todo visible)');
+  isFill = !isFill;
+  document.getElementById('screen-live').classList.toggle('fill-mode', isFill);
+  document.getElementById('fit-out').style.display = isFill ? 'none'  : 'block';
+  document.getElementById('fit-in').style.display  = isFill ? 'block' : 'none';
+  document.getElementById('fit-lbl').textContent   = isFill ? 'AJUSTAR' : 'LLENAR';
+  toast(isFill ? 'Modo Llenar' : 'Modo Ajustar');
+}
+
+// ── AUDIO ────────────────────────────────────────────────────
+function toggleAudio(){
+  var vid = document.getElementById('remote-video');
+  isMuted = !isMuted;
+  vid.muted = isMuted;
+  document.getElementById('audio-off').style.display = isMuted  ? 'block' : 'none';
+  document.getElementById('audio-on').style.display  = !isMuted ? 'block' : 'none';
+  document.getElementById('audio-lbl').textContent   = isMuted  ? 'AUDIO' : 'SILENCIO';
+  toast(isMuted ? '🔇 Silenciado' : '🔊 Con audio');
+}
+
+// ── OVERLAY PLAY (cuando autoplay falla) ─────────────────────
+function mostrarOverlayPlay(){
+  // Eliminar si ya existe
+  var viejo = document.getElementById('play-overlay');
+  if(viejo) viejo.remove();
+
+  var o = document.createElement('div');
+  o.id = 'play-overlay';
+  o.innerHTML =
+    '<div class="play-icon">' +
+      '<svg width="36" height="36" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+    '</div>' +
+    '<div class="play-txt">Toca para ver la transmisión en vivo</div>';
+  o.onclick = function(){
+    var vid = document.getElementById('remote-video');
+    vid.play().then(function(){
+      o.remove();
+      showCtrl();
+      toast('▶ Reproduciendo en vivo');
+    }).catch(function(e){ console.warn('play failed:', e); });
+  };
+  document.body.appendChild(o);
+}
+
+// ── CONECTAR VIDEO ───────────────────────────────────────────
+function conectarVideo(remoteStream){
+  var vid = document.getElementById('remote-video');
+  vid.srcObject = remoteStream;
+  vid.muted = true;       // muted = autoplay sin restricción
+  isMuted = true;
+  document.getElementById('audio-off').style.display = 'block';
+  document.getElementById('audio-on').style.display  = 'none';
+  document.getElementById('audio-lbl').textContent   = 'AUDIO';
+
+  // Mostrar pantalla live primero
+  show('screen-live');
+  document.getElementById('reconnect-bar').classList.remove('on');
+
+  var p = vid.play();
+  if(p !== undefined){
+    p.then(function(){
+      showCtrl();
+      toast('🔴 En vivo — toca para controles');
+    }).catch(function(){
+      // Autoplay bloqueado — mostrar overlay de play
+      mostrarOverlayPlay();
+    });
+  } else {
+    showCtrl();
+    toast('🔴 En vivo');
+  }
+
+  // Detectar si el video se congela
+  vid.onwaiting = function(){ toast('⏳ Cargando video...'); };
+  vid.onplaying = function(){ /* video corriendo OK */ };
+  vid.onerror   = function(){ console.warn('video error'); };
 }
 
 // ── PEER / WEBRTC ────────────────────────────────────────────
 function init(){
-  if(!HOST_ID){ showError('Sin presentador','No se encontró el ID del presentador en el link.'); return; }
-  document.getElementById('connect-sub').textContent='Sesión: '+HOST_ID.slice(0,8)+'...';
+  if(!HOST_ID){
+    showError('Sin presentador', 'No se encontró el ID del presentador en el link.');
+    return;
+  }
+  document.getElementById('connect-sub').textContent = 'Sesión: ' + HOST_ID.slice(0,8) + '...';
+  document.getElementById('connect-msg').textContent = 'Conectando al servidor...';
 
-  peer=new Peer({debug:0});
+  // Destruir peer anterior si existe
+  if(peer){ try{ peer.destroy(); }catch(e){} peer = null; }
 
-  peer.on('open',function(){
-    dataConn=peer.connect(HOST_ID,{reliable:true});
-    dataConn.on('open',function(){ dataConn.send({type:'viewer-hello',name:MY_NAME}); });
-    dataConn.on('error',function(e){ console.warn('data',e); });
-  });
-
-  peer.on('call',function(call){
-    call.answer(); // sin cámara propia, solo recibimos
-
-    call.on('stream',function(remoteStream){
-      var vid=document.getElementById('remote-video');
-      vid.srcObject=remoteStream;
-
-      var p=vid.play();
-      if(p!==undefined){
-        p.then(function(){ show('screen-live'); showCtrl(); toast('Conectado — toca la pantalla para controles'); })
-         .catch(function(){ show('screen-live'); overlayPlay(); });
-      } else {
-        show('screen-live'); showCtrl();
-      }
-    });
-
-    call.on('error',function(e){ console.warn('call err',e); });
-    call.on('close',function(){ showError('Transmisión finalizada','El presentador detuvo la demo.'); });
-  });
-
-  peer.on('error',function(e){
-    if(e.type==='peer-unavailable'){
-      showError('Presentador no disponible','La sesión no está activa. Pide que inicien la demo y reintenta.');
-    } else {
-      document.getElementById('connect-msg').textContent='Reintentando conexión...';
-      setTimeout(function(){ location.reload(); },4000);
+  peer = new Peer({
+    debug: 0,
+    config:{
+      iceServers:[
+        { urls:'stun:stun.l.google.com:19302' },
+        { urls:'stun:stun1.l.google.com:19302' },
+        { urls:'stun:stun2.l.google.com:19302' },
+        { urls:'turn:a.relay.metered.ca:80',              username:'open', credential:'open' },
+        { urls:'turn:a.relay.metered.ca:443',             username:'open', credential:'open' },
+        { urls:'turn:a.relay.metered.ca:443?transport=tcp',username:'open', credential:'open' }
+      ],
+      iceCandidatePoolSize: 10
     }
   });
+
+  peer.on('open', function(myId){
+    document.getElementById('connect-msg').textContent = 'Anunciándome al presentador...';
+    console.log('Receptor listo, mi ID:', myId, '| Host ID:', HOST_ID);
+
+    // 1. Abrir canal de datos para anunciarse
+    dataConn = peer.connect(HOST_ID, { reliable: true });
+
+    dataConn.on('open', function(){
+      console.log('Canal de datos abierto');
+      dataConn.send({ type: 'viewer-hello', name: MY_NAME });
+      document.getElementById('connect-msg').textContent = 'Esperando video del presentador...';
+      intentos = 0;
+    });
+
+    dataConn.on('error', function(e){
+      console.warn('dataConn error:', e);
+    });
+
+    dataConn.on('close', function(){
+      console.log('Canal de datos cerrado');
+    });
+  });
+
+  // 2. Recibir la llamada de video cuando el transmisor nos llame
+  peer.on('call', function(call){
+    console.log('📞 Llamada de video recibida del transmisor');
+    activeCall = call;
+
+    // Responder SIN stream propio (solo recibimos)
+    call.answer();
+
+    call.on('stream', function(remoteStream){
+      console.log('✅ Stream recibido, tracks:', remoteStream.getTracks().length);
+      remoteStream.getTracks().forEach(function(t){
+        console.log('  track:', t.kind, '| enabled:', t.enabled, '| readyState:', t.readyState);
+      });
+      conectarVideo(remoteStream);
+    });
+
+    call.on('error', function(e){
+      console.warn('call error:', e);
+    });
+
+    call.on('close', function(){
+      console.log('Llamada cerrada');
+      showError('Transmisión finalizada', 'El presentador detuvo la demo.');
+    });
+  });
+
+  peer.on('error', function(e){
+    console.warn('PeerJS error:', e.type, e);
+
+    if(e.type === 'peer-unavailable'){
+      intentos++;
+      if(intentos <= 8){
+        var seg = intentos * 2;
+        document.getElementById('connect-msg').textContent = 'Presentador no disponible — reintentando en ' + seg + 's...';
+        document.getElementById('reconnect-bar').classList.add('on');
+        reconnectTimer = setTimeout(function(){ init(); }, seg * 1000);
+      } else {
+        showError('Presentador no disponible', 'La sesión no está activa. Pide que inicien la demo y vuelve a abrir el link.');
+      }
+    } else if(e.type === 'network' || e.type === 'server-error'){
+      document.getElementById('connect-msg').textContent = 'Error de red — reintentando...';
+      reconnectTimer = setTimeout(function(){ init(); }, 3000);
+    } else {
+      document.getElementById('connect-msg').textContent = 'Error: ' + e.type + ' — reintentando...';
+      reconnectTimer = setTimeout(function(){ init(); }, 4000);
+    }
+  });
+
+  peer.on('disconnected', function(){
+    console.log('PeerJS desconectado — reconectando...');
+    document.getElementById('reconnect-bar').classList.add('on');
+    try{ peer.reconnect(); }catch(e){ init(); }
+  });
 }
 
-function overlayPlay(){
-  var o=document.createElement('div');
-  o.id='play-overlay';
-  o.innerHTML='<div class="play-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"/></svg></div><p>Toca para ver la transmisión</p>';
-  o.onclick=function(){ document.getElementById('remote-video').play(); o.remove(); showCtrl(); };
-  document.body.appendChild(o);
-}
-
-function showError(t,m){
-  document.getElementById('err-title').textContent=t;
-  document.getElementById('err-msg').textContent=m;
-  show('screen-error');
-}
-
+// ── TOAST ────────────────────────────────────────────────────
 var _tt;
 function toast(msg){
-  var el=document.getElementById('toast');
-  el.textContent=msg; el.classList.add('show');
-  clearTimeout(_tt); _tt=setTimeout(function(){ el.classList.remove('show'); },2800);
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_tt);
+  _tt = setTimeout(function(){ el.classList.remove('show'); }, 2800);
 }
 
+// ── ARRANCAR ─────────────────────────────────────────────────
 init();
 </script>
 </body>

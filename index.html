@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#060910">
+<title>EasyLink · Transmisor</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060910;--s1:#0d1117;--s2:#161c26;--s3:#1e2736;
+  --primary:#2563eb;--primary-glow:rgba(37,99,235,.4);
+  --green:#10b981;--green-glow:rgba(16,185,129,.3);
+  --red:#ef4444;
+  --text:#e2e8f0;--muted:#64748b;
+  --font:'Space Grotesk',sans-serif;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font);-webkit-tap-highlight-color:transparent}
+
+/* Tienda en iframe ocupa toda la pantalla */
+#store-frame{
+  position:fixed;inset:0;width:100%;height:100%;
+  border:none;z-index:1;background:#fff;
+}
+#frame-loader{
+  position:fixed;inset:0;z-index:3;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  transition:opacity .5s;
+}
+#frame-loader.gone{opacity:0;pointer-events:none}
+.spinner{width:38px;height:38px;border-radius:50%;border:3px solid var(--s3);border-top-color:var(--primary);animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.brand{display:flex;align-items:center;gap:8px}
+.brand-icon{width:32px;height:32px;border-radius:9px;background:var(--primary);display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px var(--primary-glow)}
+.brand-name{font-size:17px;font-weight:700}.brand-name span{color:#60a5fa}
+
+/* Barra superior flotante */
+#top-bar{
+  position:fixed;top:0;left:0;right:0;z-index:10;
+  padding-top:max(env(safe-area-inset-top),8px);
+  padding-left:12px;padding-right:12px;padding-bottom:14px;
+  background:linear-gradient(to bottom,rgba(0,0,0,.65) 0%,transparent 100%);
+  display:flex;align-items:center;justify-content:space-between;
+  pointer-events:none;
+}
+#status-pill{
+  display:flex;align-items:center;gap:5px;
+  padding:4px 11px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:.07em;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  pointer-events:none;transition:all .3s;
+}
+#status-pill.idle{background:rgba(100,116,139,.25);border:1px solid rgba(100,116,139,.3);color:#94a3b8}
+#status-pill.live{background:rgba(239,68,68,.85);border:1px solid rgba(239,68,68,.5);color:#fff;box-shadow:0 2px 10px rgba(239,68,68,.4)}
+#status-pill.connected{background:rgba(16,185,129,.8);border:1px solid rgba(16,185,129,.5);color:#fff;box-shadow:0 2px 10px var(--green-glow)}
+.pill-dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+#status-pill.live .pill-dot,#status-pill.connected .pill-dot{animation:blink .8s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* Barra inferior */
+#bottom-bar{
+  position:fixed;bottom:0;left:0;right:0;z-index:10;
+  padding-bottom:max(env(safe-area-inset-bottom),14px);
+  padding-left:16px;padding-right:16px;padding-top:40px;
+  background:linear-gradient(to top,rgba(0,0,0,.8) 0%,transparent 100%);
+  display:flex;flex-direction:column;gap:10px;
+}
+#link-box{
+  background:rgba(15,20,30,.8);border:1px solid rgba(255,255,255,.12);
+  border-radius:12px;padding:10px 12px;
+  display:none;flex-direction:column;gap:7px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+}
+#link-box.show{display:flex}
+.link-lbl{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+.link-url{font-size:10px;color:#93c5fd;word-break:break-all;line-height:1.5;font-family:monospace}
+.link-btns{display:flex;gap:7px}
+.lbtn{
+  flex:1;padding:8px;border-radius:9px;font-size:11px;font-weight:700;
+  border:none;cursor:pointer;font-family:var(--font);
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  transition:transform .15s;-webkit-appearance:none;
+}
+.lbtn:active{transform:scale(.93)}
+.lbtn.copy{background:var(--s3);color:var(--text);border:1px solid rgba(255,255,255,.12)}
+.lbtn.wa{background:#16a34a;color:#fff}
+
+#viewers-row{
+  display:none;align-items:center;gap:7px;
+  font-size:11px;color:#34d399;font-weight:600;
+}
+#viewers-row.show{display:flex}
+.v-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 2s infinite}
+
+.main-btns{display:flex;gap:10px}
+#btn-start{
+  flex:1;padding:17px;border-radius:14px;
+  background:var(--primary);color:#fff;font-size:15px;font-weight:700;
+  border:none;cursor:pointer;font-family:var(--font);
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  box-shadow:0 4px 22px var(--primary-glow);transition:transform .15s;
+  -webkit-appearance:none;
+}
+#btn-start:active{transform:scale(.96)}
+#btn-start:disabled{opacity:.4;pointer-events:none}
+#btn-stop{
+  display:none;flex:1;padding:17px;border-radius:14px;
+  background:rgba(239,68,68,.15);color:#f87171;font-size:15px;font-weight:700;
+  border:1.5px solid rgba(239,68,68,.35);cursor:pointer;font-family:var(--font);
+  align-items:center;justify-content:center;gap:9px;
+  transition:transform .15s;-webkit-appearance:none;
+}
+#btn-stop:active{transform:scale(.96)}
+#btn-wa{
+  width:52px;height:52px;border-radius:50%;
+  background:#16a34a;color:#fff;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 14px rgba(22,163,74,.35);transition:transform .15s;
+  flex-shrink:0;-webkit-appearance:none;
+}
+#btn-wa:active{transform:scale(.9)}
+
+/* Toast */
+#toast{
+  position:fixed;top:max(env(safe-area-inset-top),56px);left:50%;
+  transform:translateX(-50%) translateY(-8px);
+  background:rgba(30,39,54,.96);border:1px solid rgba(255,255,255,.15);
+  color:var(--text);border-radius:12px;padding:9px 18px;
+  font-size:12px;font-weight:500;z-index:100;pointer-events:none;
+  opacity:0;white-space:nowrap;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  transition:opacity .25s,transform .25s;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Pantalla init */
+#screen-init{
+  position:fixed;inset:0;z-index:20;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:24px;padding:32px;transition:opacity .5s;
+}
+#screen-init.gone{opacity:0;pointer-events:none}
+.init-icon{
+  width:70px;height:70px;border-radius:20px;background:var(--primary);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 40px var(--primary-glow);animation:glow 3s ease-in-out infinite;
+}
+@keyframes glow{0%,100%{box-shadow:0 0 28px var(--primary-glow)}50%{box-shadow:0 0 56px var(--primary-glow)}}
+.init-title{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.init-title span{color:#60a5fa}
+.init-sub{font-size:13px;color:var(--muted);text-align:center;line-height:1.6;max-width:250px}
+.init-spinner{display:flex;flex-direction:column;align-items:center;gap:10px}
+.init-spinner-ring{width:34px;height:34px;border-radius:50%;border:3px solid var(--s3);border-top-color:var(--primary);animation:spin .7s linear infinite}
+.init-txt{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div id="screen-init">
+  <div class="init-icon">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
+    </svg>
+  </div>
+  <div class="init-title">Easy<span>Link</span></div>
+  <div class="init-sub">Panel de transmisión</div>
+  <div class="init-spinner">
+    <div class="init-spinner-ring"></div>
+    <div class="init-txt" id="init-txt">Conectando...</div>
+  </div>
+</div>
+
+<iframe id="store-frame" src="about:blank" onload="onFrameLoad()" allow="fullscreen"></iframe>
+
+<div id="frame-loader">
+  <div class="brand">
+    <div class="brand-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
+      </svg>
+    </div>
+    <div class="brand-name">Easy<span>Link</span></div>
+  </div>
+  <div class="spinner"></div>
+</div>
+
+<div id="top-bar">
+  <div class="brand" style="pointer-events:none">
+    <div class="brand-icon" style="width:26px;height:26px;border-radius:7px">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
+      </svg>
+    </div>
+    <div class="brand-name" style="font-size:13px">Easy<span>Link</span></div>
+  </div>
+  <div id="status-pill" class="idle">
+    <div class="pill-dot"></div>
+    <span id="status-txt">Listo</span>
+  </div>
+</div>
+
+<div id="bottom-bar">
+  <div id="link-box">
+    <div class="link-lbl">Link del cliente</div>
+    <div class="link-url" id="link-url-txt">—</div>
+    <div class="link-btns">
+      <button class="lbtn copy" onclick="copiarLink()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        Copiar
+      </button>
+      <button class="lbtn wa" onclick="enviarWA()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        WhatsApp
+      </button>
+    </div>
+  </div>
+  <div id="viewers-row">
+    <div class="v-dot"></div>
+    <span id="viewers-txt">0 clientes viendo</span>
+  </div>
+  <div class="main-btns">
+    <button id="btn-start" onclick="iniciarDemo()" disabled>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+      Iniciar Demo
+    </button>
+    <button id="btn-stop" onclick="detenerDemo()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+      Detener
+    </button>
+    <button id="btn-wa" onclick="enviarWA()" title="WhatsApp">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ══ CONFIG ══════════════════════════════════════════════════
+var STORE_URL     = 'https://proyectosolaronline-ops.github.io/superOnline-Tienda/index.html?backend=https%3A%2F%2Fscript.google.com%2Fmacros%2Fs%2FAKfycbwQ_ESx2c-3DL83b_-ujjmvevSBGtwjPZ0e1wEHv3cnLbJOplTJDYUb_UiRVyTYXik%2Fexec&store=store_f2fcc889b992';
+var WA_NUMERO     = '5219999999999';
+var RECEPTOR_BASE = window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'receptor_easylink.html';
+
+var SERVERS = [
+  {host:'0.peerjs.com',           port:443, path:'/',       secure:true},
+  {host:'peerjs.92k.de',          port:443, path:'/',       secure:true},
+  {host:'peer.softinstigate.com', port:443, path:'/peerjs', secure:true}
+];
+var ICE_CFG = {
+  iceServers:[
+    {urls:'stun:stun.l.google.com:19302'},
+    {urls:'stun:stun1.l.google.com:19302'},
+    {urls:'turn:a.relay.metered.ca:80',                username:'open',credential:'open'},
+    {urls:'turn:a.relay.metered.ca:443',               username:'open',credential:'open'},
+    {urls:'turn:a.relay.metered.ca:443?transport=tcp', username:'open',credential:'open'}
+  ],
+  iceCandidatePoolSize:10
+};
+// ════════════════════════════════════════════════════════════
+
+var peer=null, myPeerID='', connections={};
+var isLive=false, clientLink='', frameLoaded=false, srvIdx=0;
+
+// ── PEER ─────────────────────────────────────────────────────
+function initPeer(){
+  document.getElementById('init-txt').textContent = 'Conectando...';
+  if(peer && !peer.destroyed){ try{peer.destroy();}catch(e){} }
+
+  var s = SERVERS[srvIdx % SERVERS.length];
+  peer = new Peer({host:s.host,port:s.port,path:s.path,secure:s.secure,debug:0,pingInterval:4000,config:ICE_CFG});
+
+  var opened=false;
+  var timer=setTimeout(function(){ if(!opened){srvIdx++;initPeer();} },6000);
+
+  peer.on('open',function(id){
+    opened=true; clearTimeout(timer);
+    myPeerID=id;
+    document.getElementById('init-txt').textContent='✅ Listo';
+    setStatus('idle','Listo');
+    document.getElementById('store-frame').src = STORE_URL;
+    document.getElementById('btn-start').disabled=false;
+  });
+
+  peer.on('connection',function(conn){
+    conn.on('open',function(){
+      // Receptor conectado — registrarlo
+      connections[conn.peer] = conn;
+      actualizarViewers();
+      toast('👀 Cliente conectado');
+      // Si ya estamos en vivo, enviarle la URL de la tienda inmediatamente
+      if(isLive){
+        setTimeout(function(){
+          enviarEstado(conn.peer);
+        }, 300);
+      }
+    });
+    conn.on('data',function(d){
+      if(d.type==='viewer-hello'){
+        toast('👀 '+(d.name||'Cliente')+' listo');
+        if(isLive){ setTimeout(function(){ enviarEstado(conn.peer); },300); }
+      }
+      if(d.type==='scroll-req'){
+        // Cliente pide scroll en la tienda
+        try{ document.getElementById('store-frame').contentWindow.scrollTo({top:d.y,behavior:'smooth'}); }catch(e){}
+      }
+    });
+    conn.on('close',function(){
+      delete connections[conn.peer];
+      actualizarViewers();
+    });
+    conn.on('error',function(e){ console.warn('conn err',e); });
+  });
+
+  peer.on('error',function(e){
+    clearTimeout(timer);
+    console.warn('peer err',e.type);
+    srvIdx++;
+    setTimeout(initPeer,2000);
+  });
+}
+
+// ── DEMO ──────────────────────────────────────────────────────
+function iniciarDemo(){
+  if(isLive) return;
+  isLive=true;
+  generarLink();
+  setStatus('live','EN VIVO');
+  document.getElementById('btn-start').style.display='none';
+  document.getElementById('btn-stop').style.display='flex';
+  document.getElementById('btn-wa').style.display='none';
+  document.getElementById('link-box').classList.add('show');
+  // Enviar estado a todos los conectados
+  Object.keys(connections).forEach(function(id){ enviarEstado(id); });
+  // Escuchar scroll del iframe para replicarlo
+  try{
+    document.getElementById('store-frame').contentWindow.addEventListener('scroll',onStoreScroll,{passive:true});
+  }catch(e){}
+  toast('🔴 Demo iniciada');
+}
+
+function detenerDemo(){
+  if(!isLive) return;
+  isLive=false;
+  setStatus('idle','Listo');
+  document.getElementById('btn-start').style.display='flex';
+  document.getElementById('btn-stop').style.display='none';
+  document.getElementById('btn-wa').style.display='flex';
+  document.getElementById('link-box').classList.remove('show');
+  document.getElementById('viewers-row').classList.remove('show');
+  // Avisar a todos que terminó
+  broadcast({type:'demo-stop'});
+  toast('⏹ Demo detenida');
+}
+
+// ── SINCRONIZACIÓN ────────────────────────────────────────────
+var lastScrollY=0, scrollTimer=null;
+
+function onStoreScroll(){
+  var win = document.getElementById('store-frame').contentWindow;
+  var y = win.scrollY||win.pageYOffset||0;
+  if(Math.abs(y-lastScrollY)<5) return;
+  lastScrollY=y;
+  clearTimeout(scrollTimer);
+  scrollTimer=setTimeout(function(){
+    broadcast({type:'scroll',y:y});
+  },50);
+}
+
+function enviarEstado(peerId){
+  var conn = connections[peerId];
+  if(!conn) return;
+  var win = document.getElementById('store-frame').contentWindow;
+  var scrollY=0;
+  try{ scrollY = win.scrollY||win.pageYOffset||0; }catch(e){}
+  try{
+    conn.send({
+      type:'demo-start',
+      url: STORE_URL,
+      scrollY: scrollY
+    });
+  }catch(e){ console.warn('enviarEstado err',e); }
+}
+
+function broadcast(msg){
+  Object.keys(connections).forEach(function(id){
+    try{ connections[id].send(msg); }catch(e){}
+  });
+}
+
+// ── SCROLL CONTINUO ───────────────────────────────────────────
+// Observar cambios de scroll periódicamente (más confiable que el evento)
+setInterval(function(){
+  if(!isLive) return;
+  var frame = document.getElementById('store-frame');
+  try{
+    var win=frame.contentWindow;
+    var y=win.scrollY||win.pageYOffset||0;
+    if(Math.abs(y-lastScrollY)>3){
+      lastScrollY=y;
+      broadcast({type:'scroll',y:y});
+    }
+  }catch(e){}
+},100);
+
+// ── UTILS ─────────────────────────────────────────────────────
+function generarLink(){
+  clientLink = RECEPTOR_BASE+'?host='+encodeURIComponent(myPeerID);
+  document.getElementById('link-url-txt').textContent=clientLink;
+}
+function copiarLink(){
+  if(!clientLink){toast('Inicia la demo primero');return;}
+  navigator.clipboard.writeText(clientLink).then(function(){toast('✅ Link copiado');}).catch(function(){
+    var ta=document.createElement('textarea');ta.value=clientLink;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('✅ Copiado');
+  });
+}
+function enviarWA(){
+  var link=clientLink||(RECEPTOR_BASE+'?host='+myPeerID);
+  var msg='🛍️ ¡Mira mi tienda en vivo!\n\nAbre este link:\n\n'+link+'\n\n_(Powered by EasyLink)_';
+  window.open('https://wa.me/'+WA_NUMERO+'?text='+encodeURIComponent(msg),'_blank');
+}
+function setStatus(cls,txt){
+  document.getElementById('status-pill').className=cls;
+  document.getElementById('status-txt').textContent=txt;
+}
+function actualizarViewers(){
+  var n=Object.keys(connections).length;
+  var row=document.getElementById('viewers-row');
+  if(n>0){ row.classList.add('show'); document.getElementById('viewers-txt').textContent=n+' cliente'+(n>1?'s':'')+' viendo'; setStatus('connected',n+' en vivo'); }
+  else{ row.classList.remove('show'); if(isLive) setStatus('live','EN VIVO'); }
+}
+var frameLoading=true;
+function onFrameLoad(){
+  if(!frameLoading) return;
+  frameLoading=false;
+  document.getElementById('screen-init').classList.add('gone');
+  setTimeout(function(){document.getElementById('frame-loader').classList.add('gone');},300);
+}
+var _tt;
+function toast(msg){
+  var el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');
+  clearTimeout(_tt);_tt=setTimeout(function(){el.classList.remove('show');},2800);
+}
+
+initPeer();
+</script>
+</body>
+</html>

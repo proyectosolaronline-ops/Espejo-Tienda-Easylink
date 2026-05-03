@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<title>EasyLink · Tienda en vivo</title>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  background: #000;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/*
+  VIDEO: object-fit:cover + object-position:center top
+  → el stream se muestra exactamente como una app móvil en portrait
+  → sin barras negras laterales, sin distorsión
+*/
+#rv {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  background: #000;
+  display: block;
+  z-index: 1;
+}
+
+/* ── PANTALLA DE ESPERA / NO DISPONIBLE ── */
+#screen-wait {
+  position: fixed; inset: 0;
+  z-index: 20;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 32px;
+  transition: opacity .4s;
+}
+#screen-wait.gone { opacity: 0; pointer-events: none; }
+
+.sw-icon {
+  width: 64px; height: 64px;
+  border-radius: 18px;
+  background: #0d1117;
+  border: 1px solid #1e2736;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 28px;
+}
+
+.sw-title {
+  font-family: -apple-system, 'Helvetica Neue', sans-serif;
+  font-size: 20px; font-weight: 600;
+  color: #fff;
+  text-align: center;
+  letter-spacing: -.02em;
+  margin-bottom: 12px;
+}
+
+.sw-sub {
+  font-family: -apple-system, 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  color: rgba(255,255,255,.38);
+  text-align: center;
+  line-height: 1.65;
+  max-width: 250px;
+  margin-bottom: 40px;
+}
+
+.sw-dots {
+  display: flex; gap: 9px;
+  margin-bottom: 36px;
+}
+.sw-dots span {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(255,255,255,.15);
+  animation: dp 1.4s ease-in-out infinite;
+}
+.sw-dots span:nth-child(2) { animation-delay: .22s; }
+.sw-dots span:nth-child(3) { animation-delay: .44s; }
+@keyframes dp {
+  0%,100% { background: rgba(255,255,255,.15); transform: scale(1); }
+  50%      { background: rgba(255,255,255,.55); transform: scale(1.25); }
+}
+
+.sw-retry {
+  font-family: -apple-system, sans-serif;
+  font-size: 12px;
+  color: rgba(255,255,255,.22);
+}
+#retry-n { color: rgba(255,255,255,.45); font-weight: 600; }
+
+/* ── TAP TO PLAY (autoplay bloqueado iOS/Android) ── */
+#tap-play {
+  position: fixed; inset: 0;
+  z-index: 15;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(0,0,0,.5);
+}
+#tap-play.show { display: flex; }
+
+.tp-btn {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.1);
+  border: 1.5px solid rgba(255,255,255,.22);
+  display: flex; align-items: center; justify-content: center;
+  animation: tpp 1.6s ease-in-out infinite;
+}
+@keyframes tpp {
+  0%,100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+.tp-txt {
+  font-family: -apple-system, sans-serif;
+  font-size: 15px; font-weight: 500;
+  color: rgba(255,255,255,.72);
+}
+</style>
+</head>
+<body>
+
+<!-- El único elemento visible en stream: video fullscreen portrait -->
+<video id="rv" autoplay playsinline></video>
+
+<!-- Tap to play — solo si el navegador bloquea autoplay -->
+<div id="tap-play" onclick="tapPlay()">
+  <div class="tp-btn">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="#fff">
+      <polygon points="5 3 19 12 5 21 5 3"/>
+    </svg>
+  </div>
+  <div class="tp-txt">Toca para ver la tienda</div>
+</div>
+
+<!-- Pantalla mientras el vendedor no transmite -->
+<div id="screen-wait">
+  <div class="sw-icon">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+         stroke="rgba(255,255,255,.45)" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <path d="M16 10a4 4 0 01-8 0"/>
+    </svg>
+  </div>
+  <div class="sw-title" id="sw-title">El vendedor no está disponible</div>
+  <div class="sw-sub"   id="sw-sub">La tienda en vivo aparecerá aquí automáticamente en cuanto el vendedor inicie la transmisión.</div>
+  <div class="sw-dots"><span></span><span></span><span></span></div>
+  <div class="sw-retry">Reintentando en <span id="retry-n">—</span>s</div>
+</div>
+
+<script>
+/* ══ SERVIDORES PEERJS (fallback automático) ══════════════════════ */
+var SERVERS = [
+  { host:'0.peerjs.com',           port:443, path:'/',       secure:true },
+  { host:'peerjs.92k.de',          port:443, path:'/',       secure:true },
+  { host:'peer.softinstigate.com', port:443, path:'/peerjs', secure:true }
+];
+var ICE_CFG = {
+  iceServers:[
+    { urls:'stun:stun.l.google.com:19302' },
+    { urls:'stun:stun1.l.google.com:19302' },
+    { urls:'turn:a.relay.metered.ca:80',               username:'open', credential:'open' },
+    { urls:'turn:a.relay.metered.ca:443',              username:'open', credential:'open' },
+    { urls:'turn:a.relay.metered.ca:443?transport=tcp',username:'open', credential:'open' }
+  ],
+  iceCandidatePoolSize: 10
+};
+/* ════════════════════════════════════════════════════════════════= */
+
+var params  = new URLSearchParams(window.location.search);
+var HOST_ID = (params.get('host') || '').trim();
+var peer    = null;
+var srvIdx  = 0;
+var connected   = false;
+var countdown   = null;
+
+if (!HOST_ID) {
+  setText('Link inválido', 'Pide al vendedor que te comparta el link correcto.');
+  hideDots();
+} else {
+  connect();
+}
+
+/* ── CONEXIÓN ─────────────────────────────────────────────────── */
+function connect() {
+  stopCountdown();
+  if (peer && !peer.destroyed) { try { peer.destroy(); } catch(e){} }
+
+  var s = SERVERS[srvIdx % SERVERS.length];
+  peer = new Peer({
+    host: s.host, port: s.port, path: s.path, secure: s.secure,
+    debug: 0, pingInterval: 4000,
+    config: ICE_CFG
+  });
+
+  var opened = false;
+  var timer  = setTimeout(function() {
+    if (!opened) { srvIdx++; retry(2); }
+  }, 6000);
+
+  peer.on('open', function(myId) {
+    opened = true;
+    clearTimeout(timer);
+
+    // PRIMERO registrar el handler de llamadas — ANTES de avisar al transmisor
+    // Si avisamos primero, el transmisor puede llamar antes de que estemos escuchando
+    peer.on('call', function(call) {
+      call.answer(); // sin stream propio — solo recibimos
+
+      call.on('stream', function(remote) {
+        connected = true;
+        srvIdx    = srvIdx % SERVERS.length;
+        var vid   = document.getElementById('rv');
+        vid.srcObject = remote;
+        vid.muted = false;
+        var p = vid.play();
+        if(p !== undefined){
+          p.then(streamReady).catch(function() {
+            document.getElementById('screen-wait').classList.add('gone');
+            document.getElementById('tap-play').classList.add('show');
+          });
+        } else { streamReady(); }
+      });
+
+      call.on('close', callEnded);
+      call.on('error', function(e){ console.warn('call error',e); callEnded(); });
+    });
+
+    // AHORA sí avisamos al transmisor — con delay para asegurar que el handler está activo
+    setTimeout(function(){
+      var dc = peer.connect(HOST_ID, { reliable: true });
+      dc.on('open', function() {
+        // Pequeño delay adicional antes de enviar el hello
+        setTimeout(function(){
+          dc.send({ type:'viewer-hello', name:'Cliente' });
+        }, 200);
+      });
+      dc.on('error', function(e){ console.warn('dc error',e); });
+    }, 300);
+  });
+
+  peer.on('error', function(e) {
+    clearTimeout(timer);
+    if (e.type === 'peer-unavailable') {
+      // Transmisor registrado pero no transmitiendo
+      setText('El vendedor no está disponible',
+              'La tienda en vivo aparecerá aquí automáticamente.');
+      retry(8);
+    } else {
+      // Fallo de servidor — intentar el siguiente
+      srvIdx++;
+      retry(3);
+    }
+  });
+
+  peer.on('disconnected', function() {
+    if (!connected) retry(4);
+    else { try { peer.reconnect(); } catch(e){ retry(4); } }
+  });
+}
+
+/* ── STREAM ACTIVO ─────────────────────────────────────────────── */
+function streamReady() {
+  document.getElementById('screen-wait').classList.add('gone');
+  document.getElementById('tap-play').classList.remove('show');
+  keepAwake();
+}
+
+/* ── TAP TO PLAY ─────────────────────────────────────────────────*/
+function tapPlay() {
+  var vid = document.getElementById('rv');
+  vid.muted = true;
+  vid.play().then(function() {
+    document.getElementById('tap-play').classList.remove('show');
+    keepAwake();
+  }).catch(function(){});
+}
+
+/* ── LLAMADA TERMINADA ────────────────────────────────────────── */
+function callEnded() {
+  if (!connected) return;
+  connected = false;
+  var vid = document.getElementById('rv');
+  vid.srcObject = null;
+  document.getElementById('screen-wait').classList.remove('gone');
+  document.getElementById('tap-play').classList.remove('show');
+  setText('El vendedor pausó la transmisión', 'Reconectando automáticamente...');
+  retry(5);
+}
+
+/* ── REINTENTO CON CUENTA REGRESIVA ─────────────────────────────*/
+function retry(secs) {
+  stopCountdown();
+  var n  = secs;
+  var el = document.getElementById('retry-n');
+  el.textContent = n;
+  countdown = setInterval(function() {
+    n--;
+    el.textContent = n;
+    if (n <= 0) { clearInterval(countdown); connect(); }
+  }, 1000);
+}
+
+function stopCountdown() {
+  if (countdown) { clearInterval(countdown); countdown = null; }
+}
+
+/* ── HELPERS ─────────────────────────────────────────────────── */
+function setText(title, sub) {
+  document.getElementById('sw-title').textContent = title;
+  document.getElementById('sw-sub').textContent   = sub;
+}
+function hideDots() {
+  document.querySelector('.sw-dots').style.display  = 'none';
+  document.querySelector('.sw-retry').style.display = 'none';
+}
+
+/* Wake Lock: mantener pantalla encendida mientras se ve la tienda */
+async function keepAwake() {
+  try {
+    if ('wakeLock' in navigator) await navigator.wakeLock.request('screen');
+  } catch(e) {}
+}
+</script>
+</body>
+</html>

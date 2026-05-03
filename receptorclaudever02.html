@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>EasyLink · Vista en Vivo</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060910;
+  --s1:#0d1117;
+  --s2:#161c26;
+  --s3:#1e2736;
+  --border:rgba(255,255,255,.08);
+  --border2:rgba(255,255,255,.14);
+  --primary:#2563eb;
+  --primary-glow:rgba(37,99,235,.4);
+  --green:#10b981;
+  --green-glow:rgba(16,185,129,.3);
+  --red:#ef4444;
+  --text:#e2e8f0;
+  --muted:#64748b;
+  --font:'Space Grotesk',sans-serif;
+}
+html,body{
+  width:100%;height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font);
+  overflow:hidden;
+  -webkit-tap-highlight-color:transparent;
+}
+
+/* ── PANTALLAS ── */
+#screen-connecting,
+#screen-live,
+#screen-error{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  transition:opacity .4s;
+  z-index:10;
+}
+.hidden{opacity:0!important;pointer-events:none!important}
+
+/* ── PANTALLA CONECTANDO ── */
+#screen-connecting{
+  gap:20px;
+  background:var(--bg);
+}
+.brand{
+  display:flex;align-items:center;gap:10px;margin-bottom:8px;
+}
+.brand-icon{
+  width:42px;height:42px;border-radius:12px;
+  background:var(--primary);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 24px var(--primary-glow);
+}
+.brand-name{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.brand-name span{color:#60a5fa}
+.connect-spinner{
+  width:48px;height:48px;border-radius:50%;
+  border:3px solid var(--s3);
+  border-top-color:var(--primary);
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.connect-msg{
+  font-size:14px;color:var(--muted);text-align:center;
+  max-width:260px;line-height:1.6;
+}
+.connect-id{
+  font-size:11px;color:var(--s3);
+  font-family:monospace;margin-top:4px;
+}
+
+/* ── PANTALLA EN VIVO ── */
+#screen-live{
+  background:#000;
+  padding:0;
+}
+
+/* Video principal */
+#remote-video{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:contain;
+  background:#000;
+  z-index:1;
+  transition:object-fit .3s;
+}
+#screen-live.fill-mode #remote-video{
+  object-fit:cover;
+}
+
+/* Controles flotantes - se ocultan al no interactuar */
+#controls{
+  position:absolute;
+  bottom:0;left:0;right:0;
+  z-index:20;
+  padding:16px 16px 20px;
+  background:linear-gradient(transparent, rgba(0,0,0,.75));
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:10px;
+  transition:opacity .35s, transform .35s;
+}
+#controls.hide{
+  opacity:0;
+  transform:translateY(8px);
+  pointer-events:none;
+}
+
+/* Badge LIVE */
+.live-pill{
+  display:flex;align-items:center;gap:6px;
+  background:rgba(239,68,68,.9);
+  border:1px solid rgba(255,255,255,.15);
+  padding:5px 12px;border-radius:99px;
+  font-size:11px;font-weight:700;letter-spacing:.08em;
+  box-shadow:0 2px 12px rgba(239,68,68,.4);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+}
+.live-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:#fff;animation:blink .8s infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* Botones de control */
+.ctrl-group{display:flex;align-items:center;gap:8px}
+.ctrl-btn{
+  width:42px;height:42px;border-radius:12px;
+  background:rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.15);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:#fff;
+  transition:all .15s;
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  -webkit-appearance:none;
+  outline:none;
+}
+.ctrl-btn:active{background:rgba(255,255,255,.25);transform:scale(.93)}
+.ctrl-btn.primary{
+  background:rgba(37,99,235,.8);
+  border-color:rgba(37,99,235,.5);
+  box-shadow:0 2px 12px var(--primary-glow);
+}
+.ctrl-btn.primary:active{background:rgba(29,78,216,.9)}
+.ctrl-btn svg{width:18px;height:18px;flex-shrink:0}
+
+/* Label del botón fullscreen en texto pequeño debajo */
+.ctrl-label{
+  font-size:9px;color:rgba(255,255,255,.5);
+  text-align:center;margin-top:3px;letter-spacing:.04em;
+}
+.ctrl-wrap{display:flex;flex-direction:column;align-items:center}
+
+/* Topbar del receptor (aparece/desaparece con controles) */
+#top-bar{
+  position:absolute;
+  top:0;left:0;right:0;
+  z-index:20;
+  padding:env(safe-area-inset-top, 12px) 16px 12px;
+  padding-top:max(env(safe-area-inset-top), 12px);
+  background:linear-gradient(rgba(0,0,0,.6), transparent);
+  display:flex;align-items:center;gap:10px;
+  transition:opacity .35s, transform .35s;
+}
+#top-bar.hide{
+  opacity:0;
+  transform:translateY(-8px);
+  pointer-events:none;
+}
+.top-brand{display:flex;align-items:center;gap:8px}
+.top-brand-icon{
+  width:28px;height:28px;border-radius:8px;
+  background:var(--primary);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 12px var(--primary-glow);
+}
+.top-brand-name{font-size:13px;font-weight:700}
+.top-brand-name span{color:#60a5fa}
+.top-spacer{flex:1}
+.top-signal{
+  display:flex;align-items:center;gap:5px;
+  font-size:10px;color:rgba(255,255,255,.5);
+}
+.top-signal-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:var(--green);
+  box-shadow:0 0 6px var(--green-glow);
+  animation:blink 2s infinite;
+}
+
+/* ── PANTALLA ERROR ── */
+#screen-error{
+  gap:16px;background:var(--bg);
+  padding:32px;
+}
+.err-icon{font-size:48px;margin-bottom:4px}
+.err-title{font-size:18px;font-weight:700;color:#f87171;text-align:center}
+.err-msg{font-size:13px;color:var(--muted);text-align:center;line-height:1.6;max-width:280px}
+.retry-btn{
+  margin-top:8px;
+  padding:10px 28px;border-radius:10px;
+  background:var(--primary);color:#fff;
+  font-size:13px;font-weight:600;
+  border:none;cursor:pointer;font-family:var(--font);
+  box-shadow:0 2px 14px var(--primary-glow);
+  transition:all .15s;
+}
+.retry-btn:active{transform:scale(.96);background:#1d4ed8}
+
+/* Toast */
+#toast{
+  position:fixed;bottom:90px;left:50%;transform:translateX(-50%);
+  background:var(--s3);border:1px solid var(--border2);
+  color:var(--text);border-radius:10px;padding:10px 20px;
+  font-size:12px;font-weight:500;z-index:999;
+  pointer-events:none;opacity:0;
+  white-space:nowrap;
+  box-shadow:0 8px 32px rgba(0,0,0,.5);
+  transition:opacity .25s;
+}
+#toast.show{opacity:1}
+
+/* Modo landscape en móvil */
+@media (orientation:landscape) and (max-height: 500px){
+  #controls{padding:10px 20px 12px}
+  .ctrl-btn{width:38px;height:38px}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ PANTALLA: CONECTANDO ══ -->
+<div id="screen-connecting">
+  <div class="brand">
+    <div class="brand-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
+      </svg>
+    </div>
+    <div class="brand-name">Easy<span>Link</span></div>
+  </div>
+  <div class="connect-spinner"></div>
+  <div class="connect-msg" id="connect-msg">Conectando con el presentador...</div>
+  <div class="connect-id" id="connect-id-label"></div>
+</div>
+
+<!-- ══ PANTALLA: EN VIVO ══ -->
+<div id="screen-live" class="hidden">
+
+  <!-- Top bar -->
+  <div id="top-bar">
+    <div class="top-brand">
+      <div class="top-brand-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
+        </svg>
+      </div>
+      <div class="top-brand-name">Easy<span>Link</span></div>
+    </div>
+    <div class="top-spacer"></div>
+    <div class="top-signal">
+      <div class="top-signal-dot"></div>
+      En vivo
+    </div>
+  </div>
+
+  <!-- Video -->
+  <video id="remote-video" autoplay playsinline muted="false"></video>
+
+  <!-- Controles inferiores -->
+  <div id="controls">
+    <div class="live-pill">
+      <div class="live-dot"></div>
+      EN VIVO
+    </div>
+    <div class="ctrl-group">
+      <!-- Ajuste de encuadre (contain / cover) -->
+      <div class="ctrl-wrap">
+        <button class="ctrl-btn" id="btn-fit" onclick="toggleFit()" title="Ajustar / Llenar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+            <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+          </svg>
+        </button>
+        <div class="ctrl-label" id="fit-label">AJUSTAR</div>
+      </div>
+      <!-- Pantalla completa -->
+      <div class="ctrl-wrap">
+        <button class="ctrl-btn primary" id="btn-fs" onclick="toggleFullscreen()" title="Pantalla completa">
+          <svg id="fs-icon-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>
+          </svg>
+          <svg id="fs-icon-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+            <path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/>
+          </svg>
+        </button>
+        <div class="ctrl-label" id="fs-label">COMPLETA</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PANTALLA: ERROR ══ -->
+<div id="screen-error" class="hidden">
+  <div class="err-icon">📡</div>
+  <div class="err-title" id="err-title">Sin señal</div>
+  <div class="err-msg" id="err-msg">No se pudo conectar con el presentador. Verifica que la demo esté activa e intenta de nuevo.</div>
+  <button class="retry-btn" onclick="location.reload()">Reintentar</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ══ CONFIG ═══════════════════════════════════════════════════
+var params   = new URLSearchParams(window.location.search);
+var HOST_ID  = params.get('host') || '';
+var MY_NAME  = params.get('name') || 'Cliente';
+
+// ══ STATE ════════════════════════════════════════════════════
+var peer        = null;
+var dataConn    = null;
+var isFill      = false;
+var controlsVisible = true;
+var hideTimer   = null;
+
+// ══ SCREENS ══════════════════════════════════════════════════
+function show(id){
+  ['screen-connecting','screen-live','screen-error'].forEach(function(s){
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+}
+
+// ══ CONTROLES AUTO-HIDE ══════════════════════════════════════
+function showControls(){
+  document.getElementById('controls').classList.remove('hide');
+  document.getElementById('top-bar').classList.remove('hide');
+  controlsVisible = true;
+  resetHideTimer();
+}
+function hideControls(){
+  document.getElementById('controls').classList.add('hide');
+  document.getElementById('top-bar').classList.add('hide');
+  controlsVisible = false;
+}
+function resetHideTimer(){
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(hideControls, 3500);
+}
+document.addEventListener('click', function(e){
+  if(document.getElementById('screen-live').classList.contains('hidden')) return;
+  if(e.target.closest('.ctrl-btn')) return; // deja que el botón maneje
+  if(controlsVisible){ hideControls(); }
+  else { showControls(); }
+});
+document.addEventListener('touchstart', function(){
+  if(document.getElementById('screen-live').classList.contains('hidden')) return;
+  showControls();
+}, {passive:true});
+document.addEventListener('mousemove', function(){
+  if(document.getElementById('screen-live').classList.contains('hidden')) return;
+  showControls();
+});
+
+// ══ PANTALLA COMPLETA ════════════════════════════════════════
+function toggleFullscreen(){
+  var el = document.documentElement;
+  var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
+
+  if(isFS){
+    exitFS();
+  } else {
+    enterFS(el);
+  }
+}
+
+function enterFS(el){
+  if(el.requestFullscreen)             { el.requestFullscreen({navigationUI:'hide'}); }
+  else if(el.webkitRequestFullscreen)  { el.webkitRequestFullscreen(); }
+  else if(el.mozRequestFullScreen)     { el.mozRequestFullScreen(); }
+  else if(el.msRequestFullscreen)      { el.msRequestFullscreen(); }
+  else {
+    // Fallback para iOS Safari: simular fullscreen con CSS
+    document.body.style.position='fixed';
+    document.body.style.inset='0';
+    updateFSIcon(true);
+    toast('⛶ Modo inmersivo activado');
+  }
+  // Orientación landscape en móviles (si está soportado)
+  try{
+    if(screen.orientation && screen.orientation.lock){
+      screen.orientation.lock('landscape').catch(function(){});
+    }
+  }catch(e){}
+}
+
+function exitFS(){
+  if(document.exitFullscreen)            { document.exitFullscreen(); }
+  else if(document.webkitExitFullscreen) { document.webkitExitFullscreen(); }
+  else if(document.mozCancelFullScreen)  { document.mozCancelFullScreen(); }
+  else if(document.msExitFullscreen)     { document.msExitFullscreen(); }
+  else {
+    document.body.style.position='';
+    document.body.style.inset='';
+    updateFSIcon(false);
+  }
+  try{ screen.orientation && screen.orientation.unlock && screen.orientation.unlock(); }catch(e){}
+}
+
+function updateFSIcon(isFS){
+  document.getElementById('fs-icon-enter').style.display = isFS ? 'none' : 'block';
+  document.getElementById('fs-icon-exit').style.display  = isFS ? 'block' : 'none';
+  document.getElementById('fs-label').textContent = isFS ? 'SALIR' : 'COMPLETA';
+}
+
+// Escuchar cambios de fullscreen (todos los prefijos)
+['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange'].forEach(function(ev){
+  document.addEventListener(ev, function(){
+    var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
+    updateFSIcon(isFS);
+  });
+});
+
+// Teclado: F / F11 / Escape
+document.addEventListener('keydown', function(e){
+  if(e.key === 'f' || e.key === 'F' || e.key === 'F11'){ e.preventDefault(); toggleFullscreen(); }
+});
+
+// ══ AJUSTE DE VIDEO (contain / cover) ════════════════════════
+function toggleFit(){
+  isFill = !isFill;
+  document.getElementById('screen-live').classList.toggle('fill-mode', isFill);
+  document.getElementById('fit-label').textContent = isFill ? 'AJUSTAR' : 'LLENAR';
+  toast(isFill ? '⛶ Modo Llenar' : '⬜ Modo Ajustar');
+}
+
+// ══ PEER / WEBRTC ═════════════════════════════════════════════
+function init(){
+  if(!HOST_ID){
+    showError('Sin presentador', 'No se especificó el ID del presentador. Verifica el link que te enviaron.');
+    return;
+  }
+  document.getElementById('connect-id-label').textContent = 'Presentador: '+HOST_ID.slice(0,8)+'...';
+
+  peer = new Peer({ debug:0 });
+
+  peer.on('open', function(myId){
+    // Conectar canal de datos para anunciarse
+    dataConn = peer.connect(HOST_ID, { reliable:true });
+    dataConn.on('open', function(){
+      dataConn.send({ type:'viewer-hello', name:MY_NAME });
+    });
+    dataConn.on('error', function(e){ console.warn('data conn error', e); });
+  });
+
+  // Recibir stream de video
+  peer.on('call', function(call){
+    call.answer(); // sin stream propio
+    call.on('stream', function(remoteStream){
+      var vid = document.getElementById('remote-video');
+      vid.srcObject = remoteStream;
+      vid.play().catch(function(e){
+        // Autoplay bloqueado — mostrar botón de play
+        console.warn('autoplay bloqueado:', e);
+        mostrarBtnPlay();
+      });
+      show('screen-live');
+      showControls();
+      toast('🔴 Conectado — toca la pantalla para ver controles');
+    });
+    call.on('error', function(e){ console.warn('call error', e); });
+    call.on('close', function(){
+      showError('Transmisión finalizada', 'El presentador detuvo la demo. Puedes cerrar esta ventana.');
+    });
+  });
+
+  peer.on('error', function(e){
+    console.warn('peer error', e);
+    if(e.type === 'peer-unavailable'){
+      showError('Presentador no disponible', 'La sesión no está activa. Pide al presentador que inicie la demo y vuelve a intentarlo.');
+    } else {
+      document.getElementById('connect-msg').textContent = 'Reintentando conexión...';
+      setTimeout(function(){ location.reload(); }, 4000);
+    }
+  });
+}
+
+// ══ AUTOPLAY BLOQUEADO ═══════════════════════════════════════
+function mostrarBtnPlay(){
+  var btn = document.createElement('button');
+  btn.textContent = '▶ Tocar para ver';
+  btn.style.cssText='position:fixed;inset:0;width:100%;height:100%;background:rgba(0,0,0,.7);color:#fff;font-size:18px;font-weight:700;border:none;cursor:pointer;z-index:50;font-family:inherit;';
+  btn.onclick=function(){
+    document.getElementById('remote-video').play();
+    btn.remove();
+    show('screen-live');
+    showControls();
+  };
+  document.body.appendChild(btn);
+  show('screen-live');
+}
+
+// ══ PANTALLA ERROR ════════════════════════════════════════════
+function showError(title, msg){
+  document.getElementById('err-title').textContent = title;
+  document.getElementById('err-msg').textContent   = msg;
+  show('screen-error');
+}
+
+// ══ TOAST ════════════════════════════════════════════════════
+var _toastT;
+function toast(msg){
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastT);
+  _toastT = setTimeout(function(){ el.classList.remove('show'); }, 2800);
+}
+
+// ══ BOOT ══════════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>

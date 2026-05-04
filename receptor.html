@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<title>EasyLink · Receptor Mobile</title>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  body {
+    background: #000;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    overflow: hidden;
+    touch-action: manipulation;
+  }
+
+  .container {
+    width: 100%;
+    height: 100vh;
+    height: -webkit-fill-available;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+  }
+
+  /* ── Video optimizado mobile ── */
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+    display: block;
+  }
+
+  /* ── Barra superior mobile ── */
+  .top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+
+  .top-bar > * {
+    pointer-events: auto;
+  }
+
+  .status-badge {
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    color: #0f0;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #0f0;
+    animation: pulse 2s infinite;
+  }
+
+  .status-dot.offline {
+    background: #f00;
+    animation: none;
+  }
+
+  .status-dot.connecting {
+    background: #ff0;
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .peer-id {
+    color: rgba(255,255,255,0.5);
+    font-size: 10px;
+    font-family: monospace;
+  }
+
+  /* ── Menú inferior flotante ── */
+  .bottom-menu {
+    position: fixed;
+    bottom: 20px;
+    bottom: max(20px, env(safe-area-inset-bottom, 20px));
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+    background: rgba(20,20,20,0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 8px;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  .menu-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    border: none;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .menu-btn:active {
+    background: rgba(255,255,255,0.2);
+    transform: scale(0.93);
+  }
+
+  .menu-btn.active {
+    background: rgba(0,122,255,0.5);
+    border: 1px solid rgba(0,122,255,0.8);
+  }
+
+  .menu-btn svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .btn-label {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: rgba(255,255,255,0.6);
+    white-space: nowrap;
+  }
+
+  /* ── Overlay tienda optimizado ── */
+  #storeOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: #000;
+    flex-direction: column;
+  }
+
+  #storeOverlay.visible {
+    display: flex;
+  }
+
+  .store-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #0a0a0a;
+    padding: 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    gap: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .store-title {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .store-title .icon {
+    font-size: 20px;
+  }
+
+  .close-store-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .close-store-btn:active {
+    background: rgba(255,0,0,0.3);
+    transform: scale(0.93);
+  }
+
+  #storeFrame {
+    flex: 1;
+    width: 100%;
+    border: none;
+    background: #fff;
+  }
+
+  /* ── Estados y mensajes ── */
+  .loading-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    background: #000;
+    gap: 20px;
+  }
+
+  .loading-overlay.hidden {
+    display: none;
+  }
+
+  .spinner {
+    width: 44px;
+    height: 44px;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .loading-text {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    padding: 0 32px;
+    line-height: 1.4;
+  }
+
+  .loading-subtext {
+    color: rgba(255,255,255,0.4);
+    font-size: 11px;
+    font-family: monospace;
+  }
+
+  .error-toast {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    background: rgba(255,45,85,0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    color: #fff;
+    padding: 16px 24px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 300;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-align: center;
+    max-width: calc(100% - 40px);
+  }
+
+  .error-toast.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    pointer-events: auto;
+  }
+
+  /* ── Ajustes pantallas pequeñas ── */
+  @media (max-width: 380px) {
+    .bottom-menu {
+      gap: 4px;
+      padding: 6px;
+    }
+    .menu-btn {
+      width: 42px;
+      height: 42px;
+    }
+    .status-badge {
+      font-size: 10px;
+      padding: 4px 10px;
+    }
+  }
+
+  /* ── Tablets y pantallas más grandes ── */
+  @media (min-width: 768px) {
+    .bottom-menu {
+      gap: 12px;
+      padding: 10px 16px;
+    }
+    .menu-btn {
+      width: 56px;
+      height: 56px;
+      font-size: 24px;
+    }
+    .menu-btn svg {
+      width: 26px;
+      height: 26px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <video id="remoteVideo" autoplay playsinline muted webkit-playsinline x5-video-player-type="h5" x5-video-orientation="landscape"></video>
+</div>
+
+<!-- Barra superior con estado -->
+<div class="top-bar" id="topBar" style="display:none;">
+  <div class="status-badge" id="statusBadge">
+    <span class="status-dot connecting" id="statusDot"></span>
+    <span id="statusText">Conectando</span>
+  </div>
+  <div class="peer-id" id="peerIdDisplay"></div>
+</div>
+
+<!-- Menú inferior -->
+<div class="bottom-menu" id="bottomMenu" style="display:none;">
+  <button class="menu-btn" id="btnFullscreen" aria-label="Pantalla completa">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="15 3 21 3 21 9"></polyline>
+      <polyline points="9 21 3 21 3 15"></polyline>
+      <line x1="21" y1="3" x2="14" y2="10"></line>
+      <line x1="3" y1="21" x2="10" y2="14"></line>
+    </svg>
+    <span class="btn-label">Fullscreen</span>
+  </button>
+  
+  <button class="menu-btn" id="btnStore" aria-label="Ver tienda">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <path d="M16 10a4 4 0 0 1-8 0"></path>
+    </svg>
+    <span class="btn-label">Tienda</span>
+  </button>
+
+  <button class="menu-btn" id="btnRefresh" aria-label="Reconectar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="23 4 23 10 17 10"></polyline>
+      <polyline points="1 20 1 14 7 14"></polyline>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+    </svg>
+    <span class="btn-label">Reconectar</span>
+  </button>
+</div>
+
+<!-- Overlay de tienda -->
+<div id="storeOverlay">
+  <div class="store-header">
+    <div class="store-title">
+      <span class="icon">🏪</span>
+      <span>Tienda EasyLink</span>
+    </div>
+    <button class="close-store-btn" id="btnCloseStore">✕</button>
+  </div>
+  <iframe id="storeFrame" src="tienda.html" allowfullscreen sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+</div>
+
+<!-- Pantalla de carga -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">📡 Buscando transmisor...</div>
+  <div class="loading-subtext" id="loadingSubtext"></div>
+</div>
+
+<!-- Toast de error -->
+<div class="error-toast" id="errorToast"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const hostId = urlParams.get('host');
+
+  // ── Elementos DOM ────────────────────────────────────
+  const video = document.getElementById('remoteVideo');
+  const topBar = document.getElementById('topBar');
+  const bottomMenu = document.getElementById('bottomMenu');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const peerIdDisplay = document.getElementById('peerIdDisplay');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const loadingText = document.getElementById('loadingText');
+  const loadingSubtext = document.getElementById('loadingSubtext');
+  const errorToast = document.getElementById('errorToast');
+  const storeOverlay = document.getElementById('storeOverlay');
+  const storeFrame = document.getElementById('storeFrame');
+
+  let peer = null;
+  let currentCall = null;
+  let reconnectTimer = null;
+
+  // ── Utilidades ───────────────────────────────────────
+  function showError(msg, duration = 4000) {
+    errorToast.textContent = '⚠️ ' + msg;
+    errorToast.classList.add('show');
+    clearTimeout(errorToast._timeout);
+    errorToast._timeout = setTimeout(() => {
+      errorToast.classList.remove('show');
+    }, duration);
+  }
+
+  function updateStatus(state) {
+    statusDot.className = 'status-dot';
+    switch(state) {
+      case 'connecting':
+        statusDot.classList.add('connecting');
+        statusText.textContent = 'Conectando';
+        break;
+      case 'connected':
+        statusDot.classList.remove('connecting', 'offline');
+        statusText.textContent = 'EN VIVO';
+        break;
+      case 'offline':
+        statusDot.classList.add('offline');
+        statusText.textContent = 'Desconectado';
+        break;
+      case 'error':
+        statusDot.classList.add('offline');
+        statusText.textContent = 'Error';
+        break;
+    }
+  }
+
+  function setLoading(mainText, subText = '') {
+    loadingText.textContent = mainText;
+    loadingSubtext.textContent = subText;
+    loadingOverlay.classList.remove('hidden');
+  }
+
+  function hideLoading() {
+    loadingOverlay.classList.add('hidden');
+  }
+
+  // ── Pantalla completa (mobile-friendly) ──────────────
+  function toggleFullscreen() {
+    const el = document.documentElement;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      const requestFS = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (requestFS) {
+        requestFS.call(el).catch(() => {
+          // Fallback: fullscreen del video
+          if (video.requestFullscreen) video.requestFullscreen().catch(()=>{});
+          else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen().catch(()=>{});
+        });
+      }
+    } else {
+      const exitFS = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exitFS) exitFS.call(document).catch(()=>{});
+    }
+  }
+
+  // ── Overlay tienda ────────────────────────────────────
+  function openStore() {
+    storeOverlay.classList.add('visible');
+    // Intentar fullscreen del overlay
+    if (storeOverlay.requestFullscreen) {
+      storeOverlay.requestFullscreen().catch(()=>{});
+    }
+  }
+
+  function closeStore() {
+    storeOverlay.classList.remove('visible');
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      const exitFS = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exitFS) exitFS.call(document).catch(()=>{});
+    }
+  }
+
+  // ── Reconexión ───────────────────────────────────────
+  function attemptReconnect() {
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    
+    showError('Intentando reconectar...', 2000);
+    updateStatus('connecting');
+    setLoading('🔄 Reconectando...', 'Por favor espera');
+    
+    // Limpiar conexión anterior
+    if (currentCall) {
+      currentCall.close();
+      currentCall = null;
+    }
+    if (peer) {
+      peer.destroy();
+      peer = null;
+    }
+    
+    video.srcObject = null;
+    bottomMenu.style.display = 'none';
+    topBar.style.display = 'none';
+    
+    // Pequeño delay antes de reconectar
+    reconnectTimer = setTimeout(() => {
+      initializeConnection();
+    }, 1500);
+  }
+
+  // ── Inicializar PeerJS ──────────────────────────────
+  function initializeConnection() {
+    if (!hostId) {
+      showError('⚠️ Falta ID del transmisor. Usa ?host=ID_PEER');
+      setLoading('❌ Error de configuración', 'Agrega ?host=TU_ID en la URL');
+      updateStatus('error');
+      return;
+    }
+
+    updateStatus('connecting');
+    setLoading('📡 Buscando transmisor...', hostId.slice(0, 16) + '...');
+    topBar.style.display = 'flex';
+    peerIdDisplay.textContent = 'ID: ' + hostId.slice(0, 8) + '...';
+
+    try {
+      peer = new Peer({
+        debug: 0,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { 
+              urls: [
+                'turn:a.relay.metered.ca:80',
+                'turn:a.relay.metered.ca:443',
+                'turn:a.relay.metered.ca:443?transport=tcp'
+              ],
+              username: 'open',
+              credential: 'open'
+            }
+          ],
+          iceCandidatePoolSize: 10
+        }
+      });
+
+      peer.on('open', function(myId) {
+        console.log('✅ Peer conectado, mi ID:', myId);
+        setLoading('📞 Llamando al transmisor...', hostId.slice(0, 16) + '...');
+        updateStatus('connecting');
+
+        // Conexión de datos
+        const dataConn = peer.connect(hostId, { reliable: true });
+
+        dataConn.on('open', function() {
+          console.log('📡 Canal de datos abierto');
+          setLoading('📡 Esperando stream de video...', 'Preparando recepción');
+          dataConn.send({ 
+            type: 'viewer-hello', 
+            name: 'Receptor Mobile',
+            device: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop'
+          });
+        });
+
+        dataConn.on('error', function(err) {
+          console.warn('Error canal datos:', err);
+          showError('No se pudo contactar al transmisor');
+          updateStatus('offline');
+          setLoading('⚠️ Transmisor no disponible', '¿Está activo el host?');
+        });
+      });
+
+      // Recibir llamada entrante
+      peer.on('call', function(incomingCall) {
+        console.log('📹 Llamada entrante recibida');
+        setLoading('🎬 Recibiendo video...', 'Casi listo');
+        currentCall = incomingCall;
+        
+        incomingCall.answer();
+
+        incomingCall.on('stream', function(remoteStream) {
+          console.log('✅ Stream de video recibido');
+          hideLoading();
+          bottomMenu.style.display = 'flex';
+          topBar.style.display = 'flex';
+          updateStatus('connected');
+          
+          video.srcObject = remoteStream;
+          
+          video.play().then(() => {
+            console.log('▶️ Video reproduciéndose');
+          }).catch(e => {
+            console.warn('Autoplay bloqueado, intentando con interacción:', e);
+            showError('Toca la pantalla para iniciar el video');
+            
+            // Intentar play con interacción del usuario
+            const playOnTouch = () => {
+              video.play().catch(()=>{});
+              document.removeEventListener('touchstart', playOnTouch);
+              document.removeEventListener('click', playOnTouch);
+            };
+            document.addEventListener('touchstart', playOnTouch, { once: true });
+            document.addEventListener('click', playOnTouch, { once: true });
+          });
+        });
+
+        incomingCall.on('error', function(err) {
+          console.error('Error en llamada:', err);
+          showError('Error en la transmisión de video');
+          updateStatus('error');
+          hideLoading();
+        });
+
+        incomingCall.on('close', function() {
+          console.log('📴 Llamada cerrada por el transmisor');
+          updateStatus('offline');
+          bottomMenu.style.display = 'flex'; // mantener menú para reconectar
+          video.srcObject = null;
+          setLoading('⏹ Transmisión terminada', 'El transmisor detuvo la demo');
+          showError('Transmisión finalizada por el host', 6000);
+        });
+      });
+
+      peer.on('error', function(err) {
+        console.error('Error PeerJS:', err);
+        updateStatus('error');
+        hideLoading();
+        
+        switch(err.type) {
+          case 'peer-unavailable':
+            showError('El transmisor no está disponible');
+            setLoading('❌ Transmisor offline', 'Espera a que inicie la demo');
+            break;
+          case 'network':
+            showError('Error de red. Verifica tu conexión');
+            setLoading('📵 Error de conexión', 'Revisa tu internet');
+            break;
+          case 'server-error':
+            showError('Error en servidor de señalización');
+            setLoading('⚠️ Servidor no disponible', 'Intenta de nuevo más tarde');
+            break;
+          default:
+            showError('Error: ' + (err.message || err.type));
+            setLoading('❌ Error inesperado', 'Intenta reconectar');
+        }
+      });
+
+      peer.on('disconnected', function() {
+        console.log('🔌 Desconectado del servidor');
+        updateStatus('offline');
+        showError('Conexión perdida. Intentando reconectar...');
+        
+        // Intentar reconexión automática
+        setTimeout(() => {
+          if (peer && !peer.destroyed) {
+            peer.reconnect();
+          }
+        }, 3000);
+      });
+
+    } catch (err) {
+      console.error('Error al crear Peer:', err);
+      showError('Error al inicializar conexión');
+      updateStatus('error');
+      hideLoading();
+    }
+  }
+
+  // ── Event Listeners ──────────────────────────────────
+  document.getElementById('btnFullscreen').addEventListener('click', toggleFullscreen);
+  document.getElementById('btnStore').addEventListener('click', openStore);
+  document.getElementById('btnCloseStore').addEventListener('click', closeStore);
+  document.getElementById('btnRefresh').addEventListener('click', attemptReconnect);
+
+  // Cerrar tienda con botón atrás (mobile)
+  window.addEventListener('popstate', function(e) {
+    if (storeOverlay.classList.contains('visible')) {
+      closeStore();
+      e.preventDefault();
+    }
+  });
+
+  // Push state cuando se abre tienda
+  const originalOpenStore = openStore;
+  openStore = function() {
+    history.pushState({ storeOpen: true }, '', window.location.href);
+    originalOpenStore();
+  };
+
+  // Gestos: doble tap para pantalla completa
+  let lastTap = 0;
+  video.addEventListener('click', function(e) {
+    const currentTime = new Date().getTime();
+    const tapLength = currentTime - lastTap;
+    if (tapLength < 300 && tapLength > 0) {
+      e.preventDefault();
+      toggleFullscreen();
+    }
+    lastTap = currentTime;
+  });
+
+  // Manejar cambios de fullscreen
+  document.addEventListener('fullscreenchange', updateFullscreenButton);
+  document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+
+  function updateFullscreenButton() {
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    const btn = document.getElementById('btnFullscreen');
+    if (isFullscreen) {
+      btn.classList.add('active');
+      btn.querySelector('.btn-label').textContent = 'Salir';
+    } else {
+      btn.classList.remove('active');
+      btn.querySelector('.btn-label').textContent = 'Fullscreen';
+    }
+  }
+
+  // Prevenir gestures no deseados
+  document.addEventListener('gesturestart', function(e) { e.preventDefault(); });
+  document.addEventListener('gesturechange', function(e) { e.preventDefault(); });
+  document.addEventListener('gestureend', function(e) { e.preventDefault(); });
+
+  // Limpiar al salir
+  window.addEventListener('beforeunload', function() {
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (currentCall) currentCall.close();
+    if (peer) peer.destroy();
+  });
+
+  // Mantener pantalla encendida (si el navegador lo soporta)
+  if ('wakeLock' in navigator) {
+    try {
+      navigator.wakeLock.request('screen').catch(() => {});
+    } catch(e) {}
+  }
+
+  // ── Iniciar ──────────────────────────────────────────
+  initializeConnection();
+
+})();
+</script>
+</body>
+</html>

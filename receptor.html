@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>EasyLink · Receptor</title>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:#000;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:system-ui,-apple-system,sans-serif;
+  }
+  .container{
+    width:100%;
+    max-width:100%;
+    position:relative;
+  }
+  video{
+    width:100%;
+    height:auto;
+    display:block;
+    background:#000;
+  }
+  /* ── Controles flotantes ── */
+  .controls{
+    position:fixed;
+    bottom:20px;
+    right:20px;
+    display:flex;
+    gap:8px;
+    z-index:100;
+  }
+  .btn{
+    background:rgba(0,0,0,0.75);
+    backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,0.15);
+    color:#fff;
+    padding:8px 14px;
+    border-radius:8px;
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+    transition:background 0.15s;
+    white-space:nowrap;
+  }
+  .btn:hover{ background:rgba(255,255,255,0.15); }
+  .btn:active{ transform:scale(0.97); }
+
+  /* ── Overlay iframe tienda ── */
+  #storeOverlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:500;
+    background:#000;
+    flex-direction:column;
+  }
+  #storeOverlay.visible{ display:flex; }
+  #storeOverlay iframe{
+    flex:1;
+    width:100%;
+    border:none;
+  }
+  #storeOverlay .store-bar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    background:#111;
+    padding:8px 16px;
+    gap:12px;
+  }
+  #storeOverlay .store-bar span{
+    color:#aaa;
+    font-size:13px;
+  }
+  #storeOverlay .store-bar button{
+    background:rgba(255,255,255,0.1);
+    border:1px solid rgba(255,255,255,0.2);
+    color:#fff;
+    padding:6px 14px;
+    border-radius:6px;
+    font-size:13px;
+    cursor:pointer;
+  }
+  #storeOverlay .store-bar button:hover{ background:rgba(255,255,255,0.2); }
+
+  /* ── Status / loading / error ── */
+  .status{
+    position:fixed;
+    bottom:20px;
+    left:20px;
+    background:rgba(0,0,0,0.7);
+    backdrop-filter:blur(8px);
+    color:#fff;
+    padding:8px 16px;
+    border-radius:99px;
+    font-size:12px;
+    font-weight:500;
+    font-family:monospace;
+    z-index:100;
+    pointer-events:none;
+  }
+  .error{
+    position:fixed;
+    bottom:20px;
+    right:20px;
+    background:rgba(255,0,0,0.8);
+    color:#fff;
+    padding:8px 16px;
+    border-radius:8px;
+    font-size:12px;
+    z-index:100;
+    display:none;
+  }
+  .loading{
+    position:fixed;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    color:#fff;
+    background:rgba(0,0,0,0.8);
+    padding:12px 24px;
+    border-radius:99px;
+    font-size:14px;
+    z-index:200;
+    white-space:nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <video id="remoteVideo" autoplay playsinline muted></video>
+</div>
+
+<!-- Botones flotantes -->
+<div class="controls" id="controls" style="display:none;">
+  <button class="btn" id="btnFullscreen">⛶ Pantalla completa</button>
+  <button class="btn" id="btnStore">🏪 Ver tienda</button>
+</div>
+
+<!-- Overlay de tienda -->
+<div id="storeOverlay">
+  <div class="store-bar">
+    <span>tienda.html</span>
+    <button id="btnCloseStore">✕ Cerrar tienda</button>
+  </div>
+  <iframe id="storeFrame" src="tienda.html" allowfullscreen></iframe>
+</div>
+
+<div class="status" id="status">🔌 Conectando...</div>
+<div class="error" id="errorMsg"></div>
+<div class="loading" id="loading">📡 Buscando transmisor...</div>
+
+<script>
+(function(){
+  const urlParams = new URLSearchParams(window.location.search);
+  const hostId    = urlParams.get('host');
+
+  const video      = document.getElementById('remoteVideo');
+  const statusDiv  = document.getElementById('status');
+  const errorDiv   = document.getElementById('errorMsg');
+  const loadingDiv = document.getElementById('loading');
+  const controls   = document.getElementById('controls');
+
+  // ── Fullscreen del video ──────────────────────────────
+  document.getElementById('btnFullscreen').addEventListener('click', function(){
+    const el = video;
+    if (el.requestFullscreen)            el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else if (el.mozRequestFullScreen)    el.mozRequestFullScreen();
+    else if (el.msRequestFullscreen)     el.msRequestFullscreen();
+  });
+
+  // ── Overlay tienda ────────────────────────────────────
+  const storeOverlay = document.getElementById('storeOverlay');
+
+  document.getElementById('btnStore').addEventListener('click', function(){
+    storeOverlay.classList.add('visible');
+    // intenta fullscreen del overlay completo
+    if (storeOverlay.requestFullscreen) storeOverlay.requestFullscreen().catch(()=>{});
+  });
+
+  document.getElementById('btnCloseStore').addEventListener('click', function(){
+    storeOverlay.classList.remove('visible');
+    if (document.fullscreenElement) document.exitFullscreen();
+  });
+
+  // ── PeerJS ────────────────────────────────────────────
+  let peer = null;
+  let currentCall = null;
+
+  function showError(msg){
+    errorDiv.textContent = '⚠️ ' + msg;
+    errorDiv.style.display = 'block';
+    statusDiv.textContent = '❌ Error';
+    loadingDiv.style.display = 'none';
+    setTimeout(()=>{ errorDiv.style.display='none'; }, 5000);
+  }
+
+  function setStatus(msg){ statusDiv.textContent = msg; }
+
+  if(!hostId){
+    showError('Falta ID del transmisor. Usa ?host=ID_PEER');
+    setStatus('❌ Sin host ID');
+    loadingDiv.style.display = 'none';
+    return;
+  }
+
+  setStatus('🟡 Conectando a PeerJS...');
+
+  peer = new Peer({
+    debug: 0,
+    config:{
+      iceServers:[
+        { urls:'stun:stun.l.google.com:19302' },
+        { urls:'stun:stun1.l.google.com:19302' },
+        { urls:'stun:stun2.l.google.com:19302' },
+        { urls:'turn:a.relay.metered.ca:80',  username:'open', credential:'open' },
+        { urls:'turn:a.relay.metered.ca:443', username:'open', credential:'open' },
+        { urls:'turn:a.relay.metered.ca:443?transport=tcp', username:'open', credential:'open' }
+      ],
+      iceCandidatePoolSize:10
+    }
+  });
+
+  peer.on('open', function(myId){
+    setStatus('🟢 Conectado al servidor');
+    loadingDiv.textContent = '📞 Llamando al transmisor ' + hostId.slice(0,8)+'...';
+
+    const dataConn = peer.connect(hostId);
+
+    dataConn.on('open', function(){
+      setStatus('📡 Saludando al transmisor...');
+      loadingDiv.textContent = '📡 Esperando stream de video...';
+      dataConn.send({ type:'viewer-hello', name:'Receptor' });
+    });
+
+    dataConn.on('error', function(err){
+      console.warn('DataConn error', err);
+      showError('No se pudo contactar al transmisor. ¿Está activo?');
+    });
+
+    peer.on('call', function(incomingCall){
+      setStatus('📹 Recibiendo video...');
+      loadingDiv.textContent = '🎬 Cargando video...';
+      currentCall = incomingCall;
+      incomingCall.answer();
+
+      incomingCall.on('stream', function(remoteStream){
+        loadingDiv.style.display = 'none';
+        controls.style.display = 'flex';   // mostrar botones al recibir video
+        video.srcObject = remoteStream;
+        video.play().catch(e=>console.warn('autoplay error',e));
+        setStatus('🟢 EN VIVO - Viendo pantalla');
+      });
+
+      incomingCall.on('error', function(err){
+        console.error('Call error', err);
+        showError('Error en la transmisión de video');
+        loadingDiv.style.display = 'none';
+      });
+
+      incomingCall.on('close', function(){
+        setStatus('⏹ Transmisión terminada');
+        controls.style.display = 'none';
+        video.srcObject = null;
+        loadingDiv.textContent = '⏹ Transmisor detuvo la demo';
+        loadingDiv.style.display = 'flex';
+      });
+    });
+  });
+
+  peer.on('error', function(err){
+    console.error('Peer error', err);
+    if(err.type === 'peer-unavailable'){
+      showError('El transmisor no está disponible o no existe');
+    } else {
+      showError('Error de conexión: ' + (err.message || err.type));
+    }
+    loadingDiv.style.display = 'none';
+  });
+
+  window.addEventListener('beforeunload', function(){
+    if(peer) peer.destroy();
+  });
+})();
+</script>
+</body>
+</html>

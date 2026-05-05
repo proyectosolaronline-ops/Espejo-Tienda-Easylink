@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Receptor — Easylink Demo</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js">
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+  width:100%;height:100%;overflow:hidden;
+  background:#000;
+  font-family:'DM Sans',system-ui,-apple-system,sans-serif;
+  color:#fff;
+  -webkit-tap-highlight-color:transparent;
+}
+#app{
+  width:100%;height:100%;
+  display:flex;flex-direction:column;
+  background:radial-gradient(ellipse at 50% 30%,#0a1a00 0%,#000 70%);
+}
+#header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;
+  background:rgba(0,0,0,.9);
+  z-index:100;
+  flex-shrink:0;
+}
+#logo{
+  display:flex;align-items:center;gap:8px;
+  font-family:'Syne',sans-serif;
+  font-size:13px;font-weight:800;
+  color:#c8f03a;letter-spacing:.08em;
+  text-transform:uppercase;
+}
+#logo-icon{
+  width:28px;height:28px;border-radius:8px;
+  background:rgba(200,240,58,.12);
+  border:1px solid rgba(200,240,58,.25);
+  display:flex;align-items:center;justify-content:center;
+}
+#live-badge{
+  display:none;align-items:center;gap:5px;
+  background:rgba(239,68,68,.15);
+  border:1px solid rgba(239,68,68,.4);
+  padding:4px 11px;border-radius:99px;
+  font-size:10px;font-weight:700;color:#f87171;
+  letter-spacing:.08em;text-transform:uppercase;
+}
+#live-badge.on{display:flex}
+#live-badge-dot{
+  width:5px;height:5px;border-radius:50%;
+  background:#ef4444;animation:blink 1s infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+#phone-container{
+  flex:1;
+  display:flex;align-items:center;justify-content:center;
+  padding:12px;
+  min-height:0;
+}
+#phone{
+  width:100%;
+  height:100%;
+  max-width:400px;
+  border-radius:36px;
+  background:#000;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.1),
+    0 0 0 8px #111,
+    0 0 0 9px rgba(255,255,255,.08),
+    0 20px 60px rgba(0,0,0,.9);
+  overflow:hidden;
+  position:relative;
+}
+#notch{
+  position:absolute;
+  top:10px;left:50%;transform:translateX(-50%);
+  width:100px;height:28px;
+  background:#000;border-radius:16px;
+  z-index:10;pointer-events:none;
+}
+
+/* Video e iframe */
+#remote-video{
+  width:100%;height:100%;
+  object-fit:contain;
+  background:#111;
+  display:none;
+}
+#store-frame{
+  width:100%;height:100%;
+  border:none;background:#fff;
+  display:none;
+}
+
+#status-bar{
+  flex-shrink:0;
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  background:rgba(0,0,0,.95);
+  display:flex;flex-direction:column;
+  gap:6px;
+}
+#status-msg{
+  font-size:12px;
+  color:rgba(255,255,255,.6);
+  text-align:center;
+  padding:8px;
+}
+#mode-indicator{
+  font-size:10px;
+  color:rgba(200,240,58,.6);
+  text-align:center;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+
+#toast{
+  position:fixed;top:60px;left:50%;transform:translateX(-50%);
+  background:#c8f03a;color:#1a2600;
+  font-size:12px;font-weight:700;font-family:'Syne',sans-serif;
+  padding:8px 18px;border-radius:99px;
+  z-index:999;display:none;white-space:nowrap;
+  box-shadow:0 4px 20px rgba(200,240,58,.4);
+}
+#toast.show{display:block}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="header">
+    <div id="logo">
+      <div id="logo-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="#c8f03a">
+          <circle cx="12" cy="12" r="5"/>
+          <path d="M2 12a10 10 0 0120 0M6 12a6 6 0 0112 0" stroke="#c8f03a" stroke-width="1.8" fill="none"/>
+        </svg>
+      </div>
+      EASYLINK
+    </div>
+    <div id="live-badge">
+      <div id="live-badge-dot"></div>
+      EN VIVO
+    </div>
+  </div>
+
+  <div id="phone-container">
+    <div id="phone">
+      <div id="notch"></div>
+      <video id="remote-video" autoplay playsinline muted></video>
+      <iframe id="store-frame" src="about:blank" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"></iframe>
+    </div>
+  </div>
+
+  <div id="status-bar">
+    <div id="status-msg">Conectando...</div>
+    <div id="mode-indicator"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ===== CONFIGURACIÓN =====
+var params = new URLSearchParams(location.search);
+var hostID = params.get('host');
+var storeURL = params.get('url') || '';
+
+// ===== VARIABLES =====
+var peer = null;
+var connection = null;
+var currentCall = null;
+var isReceivingVideo = false;
+var reconnectAttempts = 0;
+var maxReconnectAttempts = 10;
+
+// ===== INICIALIZACIÓN =====
+if(storeURL){
+  loadStoreInIframe(storeURL);
+}
+
+function loadStoreInIframe(url){
+  var iframe = document.getElementById('store-frame');
+  iframe.src = url;
+  iframe.style.display = 'block';
+  document.getElementById('mode-indicator').textContent = 'Modo: Tienda interactiva';
+}
+
+function setStatus(msg){
+  document.getElementById('status-msg').textContent = msg;
+}
+
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timeout);
+  t._timeout = setTimeout(function(){ 
+    t.classList.remove('show'); 
+  }, 2600);
+}
+
+function updateUIForStream(status){
+  if(status === 'active'){
+    document.getElementById('live-badge').classList.add('on');
+    setStatus('📱 Recibiendo transmisión en vivo');
+    document.getElementById('mode-indicator').textContent = 'Modo: Transmisión en vivo';
+    toast('✓ Transmisión recibida');
+  } else {
+    document.getElementById('live-badge').classList.remove('on');
+    setStatus('Transmisión finalizada');
+    document.getElementById('mode-indicator').textContent = storeURL ? 'Modo: Tienda interactiva' : '';
+  }
+}
+
+// ===== PEERJS =====
+function initPeer(){
+  if(!hostID){
+    setStatus('Error: No se encontró ID del anfitrión');
+    document.getElementById('mode-indicator').textContent = 'Usa el link que te compartieron';
+    return;
+  }
+
+  setStatus('Conectando con el anfitrión...');
+  reconnectAttempts = 0;
+  
+  // Destruir peer anterior
+  if(peer){
+    try { peer.destroy(); } catch(e){}
+  }
+  
+  peer = new Peer({
+    debug: 0,
+    config:{
+      iceServers:[
+        {urls:'stun:stun.l.google.com:19302'},
+        {urls:'stun:stun1.l.google.com:19302'},
+        {urls:'stun:stun2.l.google.com:19302'},
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ],
+      iceCandidatePoolSize: 10,
+      iceTransportPolicy: 'all'
+    }
+  });
+
+  peer.on('open', function(id){
+    console.log('✅ Receptor conectado. Mi ID:', id);
+    connectToHost();
+  });
+
+  peer.on('call', function(call){
+    console.log('📹 Llamada entrante del transmisor');
+    
+    // Responder automáticamente
+    call.answer();
+    
+    call.on('stream', function(remoteStream){
+      console.log('✅ Stream de video recibido');
+      
+      var video = document.getElementById('remote-video');
+      
+      // Ocultar iframe si hay stream
+      if(storeURL){
+        document.getElementById('store-frame').style.display = 'none';
+      }
+      
+      video.style.display = 'block';
+      video.srcObject = remoteStream;
+      
+      isReceivingVideo = true;
+      updateUIForStream('active');
+    });
+    
+    call.on('close', function(){
+      console.log('📴 Stream cerrado por el transmisor');
+      handleStreamEnd();
+    });
+    
+    call.on('error', function(err){
+      console.error('Error en la llamada:', err);
+      handleStreamEnd();
+    });
+    
+    currentCall = call;
+  });
+
+  peer.on('error', function(err){
+    console.error('❌ Error PeerJS:', err);
+    
+    if(err.type === 'peer-unavailable'){
+      setStatus('Anfitrión no disponible. Reintentando...');
+      scheduleReconnect();
+    } else if(err.type === 'network' || err.type === 'server-error'){
+      setStatus('Error de red. Reintentando...');
+      scheduleReconnect();
+    } else {
+      setStatus('Error: ' + err.message);
+      document.getElementById('mode-indicator').textContent = 'Error de conexión';
+    }
+  });
+
+  peer.on('disconnected', function(){
+    console.log('🔌 Desconectado del servidor');
+    setStatus('Reconectando al servidor...');
+    if(peer && !peer.destroyed){
+      peer.reconnect();
+    }
+  });
+}
+
+function connectToHost(){
+  console.log('🔗 Conectando al host:', hostID);
+  
+  if(connection){
+    try { connection.close(); } catch(e){}
+  }
+  
+  connection = peer.connect(hostID, {
+    reliable: true,
+    metadata: { type: 'viewer' }
+  });
+  
+  connection.on('open', function(){
+    console.log('✅ Conexión de datos establecida');
+    setStatus('Conectado — esperando transmisión...');
+    toast('✓ Conectado al anfitrión');
+    reconnectAttempts = 0;
+    
+    // Saludar al transmisor
+    connection.send({type:'viewer-hello'});
+  });
+  
+  connection.on('data', function(data){
+    console.log('📨 Datos recibidos:', data);
+    
+    if(data && data.type === 'store-url' && data.url){
+      if(!storeURL){
+        storeURL = data.url;
+        loadStoreInIframe(storeURL);
+      }
+    }
+  });
+  
+  connection.on('error', function(err){
+    console.warn('Error en conexión:', err);
+    setStatus('Error de conexión — reintentando...');
+    scheduleReconnect();
+  });
+  
+  connection.on('close', function(){
+    console.log('🔌 Conexión de datos cerrada');
+    if(!isReceivingVideo){
+      setStatus('Conexión perdida');
+    }
+    scheduleReconnect();
+  });
+}
+
+function scheduleReconnect(){
+  if(reconnectAttempts >= maxReconnectAttempts){
+    setStatus('No se pudo conectar después de varios intentos');
+    return;
+  }
+  
+  reconnectAttempts++;
+  var delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+  
+  console.log('🔄 Reintentando en', delay/1000, 'segundos... (intento', reconnectAttempts, 'de', maxReconnectAttempts, ')');
+  setStatus('Reintentando conexión en ' + Math.round(delay/1000) + 's...');
+  
+  setTimeout(function(){
+    if(peer && !peer.destroyed){
+      connectToHost();
+    }
+  }, delay);
+}
+
+function handleStreamEnd(){
+  var video = document.getElementById('remote-video');
+  video.style.display = 'none';
+  if(video.srcObject){
+    video.srcObject.getTracks().forEach(function(t){ t.stop(); });
+    video.srcObject = null;
+  }
+  
+  isReceivingVideo = false;
+  currentCall = null;
+  
+  updateUIForStream('ended');
+  
+  // Restaurar iframe si hay URL de tienda
+  if(storeURL){
+    document.getElementById('store-frame').style.display = 'block';
+    document.getElementById('mode-indicator').textContent = 'Modo: Tienda interactiva';
+  }
+  
+  toast('Transmisión finalizada');
+}
+
+// ===== INICIAR =====
+if(hostID){
+  initPeer();
+} else {
+  setStatus('Esperando link del anfitrión...');
+  document.getElementById('mode-indicator').textContent = 'Usa el link que te compartieron';
+}
+</script>
+</body>
+</html>

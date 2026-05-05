@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Receptor — Tienda Live</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #000;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .topbar {
+      background: rgba(10, 10, 15, 0.96);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      color: white;
+      font-size: 1.2rem;
+    }
+
+    .live-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #ff2d55;
+      padding: 4px 12px;
+      border-radius: 40px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      color: white;
+      opacity: 0;
+      transition: 0.2s;
+    }
+
+    .live-badge.active {
+      opacity: 1;
+    }
+
+    .dot-pulse {
+      width: 8px;
+      height: 8px;
+      background: white;
+      border-radius: 50%;
+      animation: pulse 1.2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* Video */
+    .video-container {
+      flex: 1;
+      background: #000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .video-container.active {
+      display: flex;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    /* Pantalla de espera */
+    .waiting {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 24px;
+      text-align: center;
+      color: white;
+    }
+
+    .waiting-icon {
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 45, 85, 0.1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+    }
+
+    .waiting h2 {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.6rem;
+    }
+
+    .code-input {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 14px 20px;
+      border-radius: 60px;
+      font-size: 1.2rem;
+      text-align: center;
+      font-family: monospace;
+      font-weight: bold;
+      color: white;
+      width: 260px;
+      outline: none;
+      text-transform: uppercase;
+    }
+
+    .code-input:focus {
+      border-color: #ff2d55;
+    }
+
+    button {
+      background: #ff2d55;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 60px;
+      font-weight: bold;
+      color: white;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    button:active {
+      transform: scale(0.96);
+    }
+
+    button:disabled {
+      background: #444;
+      transform: none;
+    }
+
+    .loader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      z-index: 100;
+      color: white;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #ff2d55;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1c1c28;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 40px;
+      padding: 10px 20px;
+      font-size: 0.8rem;
+      color: white;
+      z-index: 200;
+      display: none;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">📺 Tienda Live</div>
+  <div class="live-badge" id="liveBadge">
+    <div class="dot-pulse"></div> EN VIVO
+  </div>
+</div>
+
+<div class="video-container" id="videoContainer">
+  <video id="receptorVideo" autoplay playsinline></video>
+</div>
+
+<div class="waiting" id="waitingScreen">
+  <div class="waiting-icon">📺</div>
+  <h2>Ver transmisión</h2>
+  <p>Ingresa el código del vendedor</p>
+  <input type="text" class="code-input" id="roomCodeInput" placeholder="Ej: LK-ABCD123" maxlength="14" autocomplete="off">
+  <button id="connectBtn">Conectar</button>
+</div>
+
+<div class="loader" id="loader">
+  <div class="spinner"></div>
+  <div id="loaderText">Conectando...</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // Elementos
+  const waitingScreen = document.getElementById('waitingScreen');
+  const videoContainer = document.getElementById('videoContainer');
+  const receptorVideo = document.getElementById('receptorVideo');
+  const connectBtn = document.getElementById('connectBtn');
+  const roomCodeInput = document.getElementById('roomCodeInput');
+  const loader = document.getElementById('loader');
+  const loaderText = document.getElementById('loaderText');
+  const toastDiv = document.getElementById('toast');
+  const liveBadge = document.getElementById('liveBadge');
+
+  let peer = null;
+  let activeCall = null;
+  let isConnected = false;
+
+  // Toast helper
+  function showToast(msg, duration = 3000) {
+    toastDiv.textContent = msg;
+    toastDiv.style.display = 'block';
+    setTimeout(() => {
+      toastDiv.style.display = 'none';
+    }, duration);
+  }
+
+  // Crear stream de audio silencioso para forzar WebRTC (evita browser-incompatible)
+  function createSilentAudioStream() {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioContext();
+      const oscillator = ctx.createOscillator();
+      const dest = ctx.createMediaStreamDestination();
+      oscillator.connect(dest);
+      oscillator.start();
+      const track = dest.stream.getAudioTracks()[0];
+      track.enabled = false; // silencio
+      return new MediaStream([track]);
+    } catch (e) {
+      // Fallback: stream vacío
+      return new MediaStream();
+    }
+  }
+
+  // Inicializar Peer (cliente)
+  function initPeerReceiver() {
+    return new Promise((resolve, reject) => {
+      peer = new Peer({
+        host: '0.peerjs.com',
+        port: 443,
+        path: '/',
+        secure: true,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun.cloudflare.com:3478' },
+            { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+            { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+          ]
+        }
+      });
+
+      peer.on('open', () => resolve());
+      peer.on('error', (err) => reject(err));
+    });
+  }
+
+  // Conectar al transmisor
+  async function connectToTransmitter(roomId) {
+    if (!peer || peer.destroyed) {
+      await initPeerReceiver();
+    }
+
+    loader.style.display = 'flex';
+    loaderText.textContent = 'Solicitando conexión...';
+
+    // Stream de audio silencioso (clave para Android)
+    const dummyStream = createSilentAudioStream();
+
+    const call = peer.call(roomId, dummyStream);
+    if (!call) {
+      loader.style.display = 'none';
+      showToast('❌ No se pudo llamar al transmisor');
+      return false;
+    }
+
+    activeCall = call;
+
+    call.on('stream', (remoteStream) => {
+      // Conexión exitosa
+      isConnected = true;
+      receptorVideo.srcObject = remoteStream;
+      videoContainer.classList.add('active');
+      waitingScreen.style.display = 'none';
+      liveBadge.classList.add('active');
+      loader.style.display = 'none';
+      showToast('🔴 Conectado a la transmisión');
+    });
+
+    call.on('error', (err) => {
+      loader.style.display = 'none';
+      showToast('⚠️ Error en la transmisión');
+      console.error(err);
+    });
+
+    call.on('close', () => {
+      if (isConnected) {
+        showToast('⏹ Transmisión finalizada');
+        resetUI();
+      }
+    });
+
+    // Timeout de 15s
+    setTimeout(() => {
+      if (!isConnected && loader.style.display === 'flex') {
+        loader.style.display = 'none';
+        showToast('⏱ Sin respuesta del transmisor');
+        resetUI();
+      }
+    }, 15000);
+
+    return true;
+  }
+
+  function resetUI() {
+    isConnected = false;
+    if (receptorVideo.srcObject) {
+      receptorVideo.srcObject.getTracks().forEach(t => t.stop());
+      receptorVideo.srcObject = null;
+    }
+    videoContainer.classList.remove('active');
+    waitingScreen.style.display = 'flex';
+    liveBadge.classList.remove('active');
+    if (activeCall) {
+      activeCall.close();
+      activeCall = null;
+    }
+  }
+
+  // Evento del botón
+  connectBtn.addEventListener('click', async () => {
+    let code = roomCodeInput.value.trim().toUpperCase();
+    if (!code) {
+      showToast('Ingresa un código válido');
+      return;
+    }
+    connectBtn.disabled = true;
+    await connectToTransmitter(code);
+    connectBtn.disabled = false;
+  });
+
+  // Auto-conectar si llega ?room=XXX
+  const urlParams = new URLSearchParams(window.location.search);
+  const autoRoom = urlParams.get('room');
+  if (autoRoom) {
+    roomCodeInput.value = autoRoom.toUpperCase();
+    setTimeout(async () => {
+      connectBtn.disabled = true;
+      await connectToTransmitter(autoRoom.toUpperCase());
+      connectBtn.disabled = false;
+    }, 500);
+  }
+
+  // Inicializar Peer al cargar (sin auto-conexión a menos que haya room)
+  window.addEventListener('load', async () => {
+    if (!autoRoom) {
+      // Solo pre-inicializamos Peer para que sea más rápido después
+      try {
+        await initPeerReceiver();
+      } catch (e) {
+        console.warn('Peer pre-init falló, reintentará al conectar');
+      }
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Transmisor - Tienda Live</title>
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0f;
+      font-family: system-ui, -apple-system, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .header {
+      background: rgba(0,0,0,0.9);
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #222;
+      z-index: 10;
+    }
+    .logo { color: white; font-weight: bold; font-size: 1.2rem; }
+    .status {
+      background: #2a2a35;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      color: #aaa;
+    }
+    .status.live { background: #ff2d55; color: white; }
+    .iframe-container { flex: 1; background: black; }
+    iframe { width: 100%; height: 100%; border: none; }
+    .code-card {
+      position: absolute;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(10px);
+      border-radius: 40px;
+      padding: 8px 20px;
+      font-size: 0.85rem;
+      color: white;
+      cursor: pointer;
+      z-index: 20;
+      border: 1px solid rgba(255,255,255,0.2);
+      white-space: nowrap;
+    }
+    .code-card span { color: #ff2d55; font-family: monospace; font-weight: bold; margin-left: 8px; }
+    .buttons {
+      position: absolute;
+      bottom: 25px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 30;
+    }
+    .btn {
+      border: none;
+      border-radius: 50px;
+      padding: 12px 24px;
+      font-weight: bold;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn:active { transform: scale(0.95); }
+    .btn-primary { background: #ff2d55; color: white; box-shadow: 0 4px 12px rgba(255,45,85,0.4); }
+    .btn-primary.stop { background: #2a2a35; color: #ff2d55; border: 1px solid #ff2d55; box-shadow: none; }
+    .btn-wa { background: #25d366; color: white; }
+    .loader {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.95);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      gap: 15px;
+      z-index: 100;
+      color: white;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: #ff2d55;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1c1c28;
+      border-radius: 30px;
+      padding: 8px 18px;
+      font-size: 0.75rem;
+      color: white;
+      display: none;
+      z-index: 200;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">📺 Tienda Live</div>
+  <div class="status" id="status">Listo</div>
+</div>
+
+<div class="iframe-container">
+  <iframe id="tiendaFrame"
+    src="https://proyectosolaronline-ops.github.io/superOnline-Tienda/index.html?backend=https%3A%2F%2Fscript.google.com%2Fmacros%2Fs%2FAKfycbwQ_ESx2c-3DL83b_-ujjmvevSBGtwjPZ0e1wEHv3cnLbJOplTJDYUb_UiRVyTYXik%2Fexec&store=store_f2fcc889b992"
+    allow="camera;microphone;display-capture;fullscreen">
+  </iframe>
+</div>
+
+<div class="code-card" id="codeCard" onclick="copiarCodigo()">
+  🔑 Código: <span id="roomCode">--</span>
+</div>
+
+<div class="buttons">
+  <button class="btn btn-wa" id="waBtn">💬 WhatsApp</button>
+  <button class="btn btn-primary" id="transmitirBtn">
+    <span>🎥</span> <span id="btnText">Transmitir pantalla</span>
+  </button>
+</div>
+
+<div class="loader" id="loader"><div class="spinner"></div><div>Cargando...</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+  // Elementos
+  const statusEl = document.getElementById('status');
+  const roomCodeSpan = document.getElementById('roomCode');
+  const transmitirBtn = document.getElementById('transmitirBtn');
+  const btnText = document.getElementById('btnText');
+  const waBtn = document.getElementById('waBtn');
+  const loader = document.getElementById('loader');
+  const toast = document.getElementById('toast');
+
+  let peer = null;
+  let myId = null;
+  let currentStream = null;
+  let activeCalls = [];
+  let isLive = false;
+
+  function showMessage(msg, duration = 3000) {
+    toast.textContent = msg;
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, duration);
+  }
+
+  function copiarCodigo() {
+    if (!myId) return;
+    navigator.clipboard.writeText(myId);
+    showMessage('✅ Código copiado: ' + myId);
+  }
+  window.copiarCodigo = copiarCodigo;
+
+  // WhatsApp
+  waBtn.addEventListener('click', () => {
+    if (!myId) { showMessage('Esperando código...'); return; }
+    const url = window.location.href.split('?')[0].replace('transmisor.html', 'receptor.html') + '?room=' + myId;
+    const msg = `🔴 *Transmisión en vivo* 🔴\n\n📺 Ver ahora: ${url}\n🔑 Código: ${myId}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  });
+
+  // Iniciar Peer
+  async function initPeer() {
+    return new Promise((resolve, reject) => {
+      const id = 'LK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+      peer = new Peer(id, {
+        host: '0.peerjs.com',
+        port: 443,
+        path: '/',
+        secure: true,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun.cloudflare.com:3478' },
+            { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+            { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+          ]
+        }
+      });
+
+      peer.on('open', (id) => {
+        myId = id;
+        roomCodeSpan.textContent = myId;
+        statusEl.textContent = 'Listo ✅';
+        resolve();
+      });
+
+      peer.on('error', (err) => reject(err));
+
+      peer.on('call', (call) => {
+        if (currentStream) {
+          call.answer(currentStream);
+          activeCalls.push(call);
+          showMessage('👁 Nuevo espectador conectado');
+        } else {
+          call.close();
+        }
+      });
+    });
+  }
+
+  // Obtener stream (siempre con audio silencioso para que funcione WebRTC)
+  async function getDisplayStream() {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    // Para evitar el error "browser-incompatible", siempre pedimos audio aunque no lo uses
+    // Pero como getDisplayMedia no siempre permite audio, hacemos un truco: stream de pantalla + audio silencioso aparte
+    
+    if (!isMobile) {
+      // Escritorio: capturar esta pestaña
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { preferCurrentTab: true, frameRate: 15 },
+          audio: false
+        });
+        
+        // Crear audio silencioso y combinarlo
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const dest = audioContext.createMediaStreamDestination();
+        oscillator.connect(dest);
+        oscillator.start();
+        const audioTrack = dest.stream.getAudioTracks()[0];
+        audioTrack.enabled = false;
+        
+        // Combinar video + audio silencioso
+        const combinedStream = new MediaStream();
+        screenStream.getVideoTracks().forEach(track => combinedStream.addTrack(track));
+        combinedStream.addTrack(audioTrack);
+        
+        return combinedStream;
+      } catch (err) {
+        throw new Error('Permiso denegado para compartir pantalla');
+      }
+    } else {
+      // Móvil: cámara + audio silencioso
+      try {
+        const videoStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: true  // Pedimos audio aunque luego lo silenciemos
+        });
+        // Silenciar el audio localmente
+        videoStream.getAudioTracks().forEach(track => track.enabled = false);
+        return videoStream;
+      } catch (err) {
+        throw new Error('Permiso de cámara denegado');
+      }
+    }
+  }
+
+  async function startBroadcast() {
+    loader.style.display = 'flex';
+    try {
+      const stream = await getDisplayStream();
+      currentStream = stream;
+      isLive = true;
+      
+      statusEl.textContent = '🔴 EN VIVO';
+      statusEl.classList.add('live');
+      btnText.textContent = 'Detener';
+      transmitirBtn.classList.add('stop');
+      loader.style.display = 'none';
+      showMessage('🔴 Transmitiendo en vivo. Comparte el código.');
+    } catch (err) {
+      loader.style.display = 'none';
+      showMessage('❌ ' + err.message);
+    }
+  }
+
+  function stopBroadcast() {
+    if (currentStream) {
+      currentStream.getTracks().forEach(track => track.stop());
+      currentStream = null;
+    }
+    activeCalls.forEach(call => call.close());
+    activeCalls = [];
+    isLive = false;
+    
+    statusEl.textContent = 'Listo';
+    statusEl.classList.remove('live');
+    btnText.textContent = 'Transmitir pantalla';
+    transmitirBtn.classList.remove('stop');
+    showMessage('⏹ Transmisión finalizada');
+  }
+
+  transmitirBtn.addEventListener('click', () => {
+    if (isLive) stopBroadcast();
+    else startBroadcast();
+  });
+
+  // Iniciar todo
+  window.addEventListener('load', async () => {
+    loader.style.display = 'flex';
+    try {
+      await initPeer();
+      loader.style.display = 'none';
+    } catch (err) {
+      loader.style.display = 'none';
+      showMessage('⚠️ Error de conexión: ' + (err.type || err));
+    }
+  });
+</script>
+</body>
+</html>

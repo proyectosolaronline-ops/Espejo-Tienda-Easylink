@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Demo en vivo — Easylink</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+  width:100%;height:100%;
+  overflow:hidden;
+  background:#000;
+  font-family:'DM Sans',system-ui,sans-serif;
+  color:#fff;
+  /* Cubre barra de estado en móvil */
+  padding-top:env(safe-area-inset-top);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+
+/* ── VIDEO FULLSCREEN ── */
+#live-video{
+  position:fixed;
+  top:0;left:0;
+  width:100vw;height:100vh;
+  object-fit:cover;   /* Cubre toda la pantalla — sin bordes negros */
+  background:#000;
+  z-index:1;
+  display:block;
+}
+
+/* ── WAITING SCREEN ── */
+#waiting{
+  position:fixed;inset:0;z-index:50;
+  background:radial-gradient(ellipse at 50% 60%, #0e1a00 0%, #000 70%);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:14px;padding:40px 32px;text-align:center;
+}
+#waiting.hidden{
+  opacity:0;pointer-events:none;
+  transition:opacity .4s ease;
+}
+
+.logo-ring{
+  width:72px;height:72px;border-radius:20px;
+  background:rgba(200,240,58,.07);
+  border:1.5px solid rgba(200,240,58,.2);
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:4px;
+  animation:float 3s ease-in-out infinite;
+}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+
+#waiting h1{
+  font-family:'Syne',sans-serif;
+  font-size:24px;font-weight:800;color:#fff;
+  letter-spacing:-.02em;
+}
+#waiting-msg{
+  font-size:13px;color:rgba(255,255,255,.45);
+  line-height:1.7;max-width:260px;
+}
+
+/* SPINNER */
+.spinner{
+  width:36px;height:36px;
+  border:2.5px solid rgba(200,240,58,.1);
+  border-top-color:#c8f03a;
+  border-radius:50%;
+  animation:spin .75s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+#connect-label{
+  font-size:10px;font-weight:600;
+  color:rgba(255,255,255,.25);
+  letter-spacing:.1em;text-transform:uppercase;
+}
+
+/* ERROR */
+#error-box{
+  display:none;flex-direction:column;align-items:center;gap:12px;
+  padding:20px 24px;
+  background:rgba(239,68,68,.07);
+  border:1px solid rgba(239,68,68,.2);
+  border-radius:18px;max-width:300px;
+}
+#error-box.on{display:flex}
+#error-msg{font-size:13px;color:rgba(255,255,255,.5);text-align:center;line-height:1.6}
+#btn-retry{
+  padding:11px 28px;
+  background:#ef4444;color:#fff;
+  border:none;border-radius:11px;
+  font-size:13px;font-weight:700;font-family:'Syne',sans-serif;
+  cursor:pointer;letter-spacing:.02em;
+  transition:all .2s;
+}
+#btn-retry:hover{background:#f87171;transform:translateY(-1px)}
+
+/* ── OVERLAY UI (sobre el video) ── */
+#ui-overlay{
+  position:fixed;inset:0;z-index:10;
+  pointer-events:none;
+  opacity:0;transition:opacity .3s ease;
+}
+#ui-overlay.on{opacity:1;pointer-events:all}
+
+/* TOP */
+#top-bar{
+  position:absolute;top:0;left:0;right:0;
+  padding:14px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 100%);
+}
+#logo{
+  display:flex;align-items:center;gap:7px;
+  font-family:'Syne',sans-serif;
+  font-size:12px;font-weight:800;color:#c8f03a;
+  letter-spacing:.08em;text-transform:uppercase;
+}
+#logo-icon{
+  width:26px;height:26px;border-radius:7px;
+  background:rgba(200,240,58,.12);border:1px solid rgba(200,240,58,.25);
+  display:flex;align-items:center;justify-content:center;
+}
+#live-pill{
+  display:flex;align-items:center;gap:5px;
+  background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);
+  padding:4px 11px;border-radius:99px;
+  font-size:10px;font-weight:700;color:#f87171;
+  letter-spacing:.08em;text-transform:uppercase;
+}
+#live-dot{width:5px;height:5px;border-radius:50%;background:#ef4444;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* BOTTOM */
+#bottom-bar{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:12px 16px 24px;
+  background:linear-gradient(to top,rgba(0,0,0,.75) 0%,transparent 100%);
+  display:flex;align-items:center;justify-content:space-between;
+}
+#quality-tag{
+  font-size:10px;font-weight:600;
+  color:rgba(255,255,255,.35);
+  letter-spacing:.06em;text-transform:uppercase;
+  display:flex;align-items:center;gap:5px;
+}
+#quality-dot{
+  width:5px;height:5px;border-radius:50%;background:#22c55e;
+  animation:pulse-green 2s infinite;
+}
+@keyframes pulse-green{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}50%{box-shadow:0 0 0 4px rgba(34,197,94,0)}}
+
+#btn-tienda{
+  display:flex;align-items:center;gap:6px;
+  padding:10px 16px;
+  background:rgba(200,240,58,.9);color:#1a2600;
+  border:none;border-radius:11px;
+  font-family:'Syne',sans-serif;
+  font-size:12px;font-weight:800;
+  cursor:pointer;letter-spacing:.02em;
+  transition:all .2s;
+  box-shadow:0 4px 20px rgba(200,240,58,.25);
+}
+#btn-tienda:hover{background:#c8f03a;transform:translateY(-1px)}
+#btn-tienda:active{transform:scale(.97)}
+
+/* TOAST */
+#toast{
+  position:fixed;top:20px;left:50%;
+  transform:translateX(-50%) translateY(-8px);
+  background:#c8f03a;color:#1a2600;
+  font-size:11px;font-weight:700;font-family:'Syne',sans-serif;
+  padding:8px 18px;border-radius:99px;
+  z-index:200;display:none;white-space:nowrap;
+  box-shadow:0 4px 20px rgba(200,240,58,.3);
+  letter-spacing:.03em;text-transform:uppercase;
+}
+#toast.show{display:block;animation:toast-pop .2s ease}
+@keyframes toast-pop{from{opacity:0;transform:translateX(-50%) translateY(-16px)}to{opacity:1;transform:translateX(-50%) translateY(-8px)}}
+
+/* TAP HINT */
+#tap-hint{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+  font-size:11px;color:rgba(255,255,255,.25);
+  z-index:9;white-space:nowrap;pointer-events:none;
+  letter-spacing:.04em;text-transform:uppercase;
+  transition:opacity 1.2s ease;
+}
+#tap-hint.gone{opacity:0}
+
+/* PAUSED OVERLAY */
+#paused-overlay{
+  position:fixed;inset:0;z-index:20;
+  background:rgba(0,0,0,.7);backdrop-filter:blur(8px);
+  display:none;align-items:center;justify-content:center;
+  flex-direction:column;gap:12px;text-align:center;padding:32px;
+}
+#paused-overlay.on{display:flex}
+#paused-overlay p{font-size:14px;color:rgba(255,255,255,.5);line-height:1.7}
+#paused-overlay h2{
+  font-family:'Syne',sans-serif;
+  font-size:20px;font-weight:800;color:#fff;
+}
+</style>
+</head>
+<body>
+
+<!-- VIDEO FULLSCREEN -->
+<video id="live-video" autoplay playsinline muted></video>
+
+<!-- OVERLAY UI -->
+<div id="ui-overlay">
+  <div id="top-bar">
+    <div id="logo">
+      <div id="logo-icon">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="#c8f03a">
+          <circle cx="12" cy="12" r="5"/>
+          <path d="M2 12a10 10 0 0120 0M6 12a6 6 0 0112 0" stroke="#c8f03a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      EASYLINK
+    </div>
+    <div id="live-pill">
+      <div id="live-dot"></div>
+      EN VIVO
+    </div>
+  </div>
+
+  <div id="bottom-bar">
+    <div id="quality-tag">
+      <div id="quality-dot"></div>
+      HD · En vivo
+    </div>
+    <button id="btn-tienda" onclick="abrirTienda()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+        <polyline points="9,22 9,12 15,12 15,22" stroke="currentColor" stroke-width="1.5" fill="none"/>
+      </svg>
+      Ir a la tienda
+    </button>
+  </div>
+</div>
+
+<!-- WAITING -->
+<div id="waiting">
+  <div class="logo-ring">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="#c8f03a">
+      <circle cx="12" cy="12" r="5"/>
+      <path d="M2 12a10 10 0 0120 0M6 12a6 6 0 0112 0" stroke="#c8f03a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <h1>Demo en vivo</h1>
+  <p id="waiting-msg">Conectando con el transmisor...</p>
+  <div class="spinner" id="spinner"></div>
+  <span id="connect-label">Conexión segura P2P</span>
+  <div id="error-box">
+    <p id="error-msg">No se pudo conectar. Verifica que el transmisor esté activo.</p>
+    <button id="btn-retry" onclick="location.reload()">Reintentar</button>
+  </div>
+</div>
+
+<!-- PAUSED -->
+<div id="paused-overlay">
+  <div class="logo-ring" style="animation:none;opacity:.5">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="#c8f03a">
+      <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+    </svg>
+  </div>
+  <h2>Transmisión pausada</h2>
+  <p>El vendedor pausó la demo.<br>Espera a que la reanude.</p>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- TAP HINT -->
+<div id="tap-hint">Toca para mostrar controles</div>
+
+<script>
+var params    = new URLSearchParams(location.search);
+var hostId    = params.get('host') || '';
+var tiendaURL = params.get('url')  || '';
+
+var peer, myConn, myCall;
+var uiVisible = false, uiTimer = null;
+var connected = false;
+
+/* ── WAITING UI ── */
+function setWaiting(msg, isError){
+  document.getElementById('waiting-msg').textContent = msg;
+  document.getElementById('connect-label').style.display = isError ? 'none' : '';
+  document.getElementById('spinner').style.display       = isError ? 'none' : 'block';
+  document.getElementById('error-box').classList.toggle('on', !!isError);
+  if(isError) document.getElementById('error-msg').textContent = msg;
+}
+
+/* ── VALIDACIÓN ── */
+if(!hostId){
+  setWaiting('Link inválido. Pide al vendedor que reenvíe el link.', true);
+  throw new Error('no hostId');
+}
+
+/* ── PEER ── */
+function initPeer(){
+  setWaiting('Conectando con el transmisor...');
+  peer = new Peer({
+    debug: 0,
+    config:{
+      iceServers:[
+        {urls:'stun:stun.l.google.com:19302'},
+        {urls:'stun:stun1.l.google.com:19302'},
+        {urls:'turn:a.relay.metered.ca:80',  username:'open', credential:'open'},
+        {urls:'turn:a.relay.metered.ca:443', username:'open', credential:'open'},
+        {urls:'turn:a.relay.metered.ca:443?transport=tcp', username:'open', credential:'open'}
+      ],
+      iceCandidatePoolSize: 10
+    }
+  });
+
+  peer.on('open', function(){
+    setWaiting('Saludando al transmisor...');
+    myConn = peer.connect(hostId, {reliable: true});
+
+    myConn.on('open', function(){
+      myConn.send({type:'viewer-hello'});
+      setWaiting('Esperando video en vivo...');
+    });
+
+    myConn.on('data', function(d){
+      if(d && d.type === 'store-url' && d.url && !tiendaURL){
+        tiendaURL = d.url;
+      }
+    });
+
+    myConn.on('close', function(){
+      if(connected){
+        connected = false;
+        document.getElementById('paused-overlay').classList.add('on');
+        document.getElementById('ui-overlay').classList.remove('on');
+        showToast('Transmisión pausada');
+      }
+    });
+
+    myConn.on('error', function(e){ console.warn(e); });
+  });
+
+  peer.on('call', function(call){
+    myCall = call;
+    call.answer();
+
+    call.on('stream', function(stream){
+      var vid = document.getElementById('live-video');
+      vid.srcObject = stream;
+      vid.play().catch(function(){
+        // Autoplay bloqueado — intenta al tocar
+        document.addEventListener('touchstart', function once(){
+          vid.play(); document.removeEventListener('touchstart', once);
+        }, {once: true, passive: true});
+      });
+      connected = true;
+      document.getElementById('waiting').classList.add('hidden');
+      document.getElementById('paused-overlay').classList.remove('on');
+      showUI(true);
+      showToast('✓ Demo en vivo conectada');
+    });
+
+    call.on('close', function(){
+      connected = false;
+      document.getElementById('paused-overlay').classList.add('on');
+      document.getElementById('ui-overlay').classList.remove('on');
+    });
+
+    call.on('error', function(e){ console.warn(e); });
+  });
+
+  peer.on('error', function(e){
+    console.warn('PeerJS error:', e.type, e);
+    var msgs = {
+      'peer-unavailable': 'El transmisor no está disponible. Pide que reenvíe el link.',
+      'network':          'Error de red. Verifica tu conexión.',
+      'server-error':     'Error de servidor. Reintentando...'
+    };
+    if(e.type === 'peer-unavailable'){
+      setWaiting(msgs['peer-unavailable'], true);
+    } else {
+      setWaiting(msgs[e.type] || 'Error de conexión. Reintentando...', false);
+      setTimeout(function(){ location.reload(); }, 4000);
+    }
+  });
+}
+
+/* ── SHOW / HIDE UI OVERLAY ── */
+function showUI(force){
+  uiVisible = true;
+  document.getElementById('ui-overlay').classList.add('on');
+  document.getElementById('tap-hint').classList.add('gone');
+  clearTimeout(uiTimer);
+  if(!force) uiTimer = setTimeout(hideUI, 3500);
+}
+function hideUI(){
+  uiVisible = false;
+  document.getElementById('ui-overlay').classList.remove('on');
+}
+
+/* Tap / click en video para mostrar/ocultar controles */
+var vid = document.getElementById('live-video');
+['click','touchstart'].forEach(function(ev){
+  vid.addEventListener(ev, function(){
+    uiVisible ? hideUI() : showUI();
+  }, {passive: true});
+});
+
+/* ── IR A LA TIENDA ── */
+function abrirTienda(){
+  if(tiendaURL){ window.open(tiendaURL, '_blank'); }
+  else { showToast('URL de tienda no disponible'); }
+}
+
+/* ── TOAST ── */
+function showToast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show';
+  clearTimeout(t._t);
+  t._t = setTimeout(function(){ t.className = ''; }, 2800);
+}
+
+/* ── INIT ── */
+initPeer();
+</script>
+</body>
+</html>

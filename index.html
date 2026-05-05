@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Transmisor — Tienda Live</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #0a0a0f;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Barra superior */
+    .topbar {
+      background: rgba(10, 10, 15, 0.96);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      z-index: 10;
+    }
+
+    .logo {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      color: white;
+      font-size: 1.2rem;
+    }
+
+    .status {
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: #1e1e2a;
+      padding: 5px 12px;
+      border-radius: 40px;
+      color: #aaa;
+    }
+
+    .status.live {
+      background: #ff2d55;
+      color: white;
+    }
+
+    /* Contenedor del iframe */
+    .iframe-container {
+      flex: 1;
+      background: #000;
+      position: relative;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    /* Código de sala */
+    .room-code {
+      position: absolute;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 60px;
+      padding: 8px 18px;
+      font-size: 0.85rem;
+      color: white;
+      font-weight: 500;
+      z-index: 20;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .room-code span {
+      font-family: monospace;
+      font-weight: bold;
+      color: #ff2d55;
+      margin-left: 6px;
+    }
+
+    /* Botones flotantes */
+    .fab {
+      position: absolute;
+      bottom: 24px;
+      right: 20px;
+      background: #ff2d55;
+      border: none;
+      border-radius: 60px;
+      padding: 12px 24px;
+      color: white;
+      font-weight: bold;
+      font-family: 'DM Sans', sans-serif;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(255, 45, 85, 0.4);
+      transition: 0.2s;
+      z-index: 30;
+    }
+
+    .fab:active {
+      transform: scale(0.96);
+    }
+
+    .fab.stop {
+      background: #2a2a35;
+      box-shadow: none;
+      color: #ff2d55;
+      border: 1px solid #ff2d55;
+    }
+
+    /* Loader */
+    .loader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      z-index: 100;
+      color: white;
+      font-size: 0.9rem;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #ff2d55;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1c1c28;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 40px;
+      padding: 10px 20px;
+      font-size: 0.8rem;
+      color: white;
+      z-index: 200;
+      display: none;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">📺 Tienda Live</div>
+  <div class="status" id="status">Listo</div>
+</div>
+
+<div class="iframe-container">
+  <iframe id="tiendaIframe"
+    src="https://proyectosolaronline-ops.github.io/superOnline-Tienda/index.html?backend=https%3A%2F%2Fscript.google.com%2Fmacros%2Fs%2FAKfycbwQ_ESx2c-3DL83b_-ujjmvevSBGtwjPZ0e1wEHv3cnLbJOplTJDYUb_UiRVyTYXik%2Fexec&store=store_f2fcc889b992"
+    allow="camera;microphone;display-capture;fullscreen">
+  </iframe>
+</div>
+
+<div class="room-code" id="roomCode" onclick="copiarCodigo()">
+  🔑 Código: <span id="roomId">--</span>
+</div>
+
+<button class="fab" id="btnTx">
+  <span>🎥</span> <span id="btnText">Transmitir</span>
+</button>
+
+<div class="loader" id="loader">
+  <div class="spinner"></div>
+  <div id="loaderText">Iniciando...</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ----- DOM elements -----
+  const statusDiv = document.getElementById('status');
+  const roomSpan = document.getElementById('roomId');
+  const btnTx = document.getElementById('btnTx');
+  const btnText = document.getElementById('btnText');
+  const loader = document.getElementById('loader');
+  const loaderText = document.getElementById('loaderText');
+  const toastDiv = document.getElementById('toast');
+
+  // ----- Estado -----
+  let peer = null;
+  let myId = null;
+  let localStream = null;
+  let activeCalls = [];
+  let isLive = false;
+
+  // ----- Helper: toast -----
+  function showToast(msg, duration = 3000) {
+    toastDiv.textContent = msg;
+    toastDiv.style.display = 'block';
+    setTimeout(() => {
+      toastDiv.style.display = 'none';
+    }, duration);
+  }
+
+  // ----- Copiar código -----
+  function copiarCodigo() {
+    if (!myId) return;
+    navigator.clipboard.writeText(myId);
+    showToast('✅ Código copiado: ' + myId);
+  }
+  window.copiarCodigo = copiarCodigo;
+
+  // ----- Iniciar PeerJS -----
+  function initPeer() {
+    return new Promise((resolve, reject) => {
+      const id = 'LK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+      peer = new Peer(id, {
+        host: '0.peerjs.com',
+        port: 443,
+        path: '/',
+        secure: true,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun.cloudflare.com:3478' },
+            { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+            { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+          ]
+        }
+      });
+
+      peer.on('open', (id) => {
+        myId = id;
+        roomSpan.textContent = myId;
+        statusDiv.textContent = 'Listo ✅';
+        resolve();
+      });
+
+      peer.on('error', (err) => {
+        console.error(err);
+        reject(err);
+      });
+
+      peer.on('call', (call) => {
+        if (localStream) {
+          call.answer(localStream);
+          activeCalls.push(call);
+          showToast('👁 Nuevo espectador conectado');
+        } else {
+          call.close();
+        }
+      });
+    });
+  }
+
+  // ----- Obtener stream (escritorio: pestaña, móvil: cámara) -----
+  async function getStream() {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    if (!isMobile) {
+      // Escritorio: capturar esta pestaña (preferCurrentTab)
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            preferCurrentTab: true,
+            frameRate: 15,
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+        // Detener transmisión si el usuario cierra el selector
+        stream.getVideoTracks()[0].onended = () => stopTransmision();
+        return stream;
+      } catch (err) {
+        if (err.name === 'NotAllowedError') {
+          throw new Error('Permiso denegado para compartir pantalla');
+        }
+        throw err;
+      }
+    } else {
+      // Móvil: cámara trasera
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        return stream;
+      } catch (err) {
+        if (err.name === 'NotAllowedError') {
+          throw new Error('Permiso de cámara denegado');
+        }
+        throw err;
+      }
+    }
+  }
+
+  // ----- Iniciar transmisión -----
+  async function startTransmision() {
+    loader.style.display = 'flex';
+    loaderText.textContent = 'Accediendo a cámara/pantalla...';
+
+    try {
+      const stream = await getStream();
+      localStream = stream;
+      isLive = true;
+
+      // Actualizar UI
+      statusDiv.textContent = '🔴 EN VIVO';
+      statusDiv.classList.add('live');
+      btnText.textContent = 'Detener';
+      btnTx.classList.add('stop');
+      loader.style.display = 'none';
+
+      showToast('🔴 Transmitiendo en vivo, comparte el código');
+    } catch (err) {
+      loader.style.display = 'none';
+      showToast('❌ Error: ' + err.message);
+      console.error(err);
+    }
+  }
+
+  // ----- Detener transmisión -----
+  function stopTransmision() {
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+      localStream = null;
+    }
+    activeCalls.forEach(call => call.close());
+    activeCalls = [];
+    isLive = false;
+
+    statusDiv.textContent = 'Listo';
+    statusDiv.classList.remove('live');
+    btnText.textContent = 'Transmitir';
+    btnTx.classList.remove('stop');
+    showToast('⏹ Transmisión finalizada');
+  }
+
+  // ----- toggle principal -----
+  async function toggleTransmision() {
+    if (isLive) {
+      stopTransmision();
+    } else {
+      await startTransmision();
+    }
+  }
+
+  // ----- Evento botón -----
+  btnTx.addEventListener('click', toggleTransmision);
+
+  // ----- Inicializar Peer al cargar -----
+  window.addEventListener('load', async () => {
+    loader.style.display = 'flex';
+    loaderText.textContent = 'Conectando al servidor...';
+    try {
+      await initPeer();
+      loader.style.display = 'none';
+    } catch (err) {
+      loader.style.display = 'none';
+      showToast('⚠️ Error de conexión: ' + err.type);
+    }
+  });
+</script>
+</body>
+</html>

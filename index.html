@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -23,7 +24,7 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'DM Sans',sans
 .frame-wrap{position:fixed;top:var(--bar-h);left:0;right:0;bottom:0}
 .frame-wrap iframe{width:100%;height:100%;border:none;display:block;background:#fff}
 
-/* PREVIEW cámara/pantalla encima del iframe */
+/* PREVIEW cámara — solo móvil */
 .preview-wrap{
   position:fixed;top:var(--bar-h);left:0;right:0;bottom:0;
   display:none;z-index:50;background:#000;
@@ -40,16 +41,57 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'DM Sans',sans
 }
 .preview-label .dot{width:6px;height:6px;border-radius:50%;background:#fff;animation:blink 1.2s infinite}
 
-/* AVISO móvil */
+/* Badge EN VIVO — PC (overlay sin bloquear iframe) */
+.pc-live-badge{
+  position:fixed;top:calc(var(--bar-h)+10px);right:16px;
+  background:rgba(255,45,85,.92);color:#fff;
+  font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  padding:5px 14px;border-radius:99px;
+  display:none;align-items:center;gap:6px;
+  z-index:110;pointer-events:none;
+}
+.pc-live-badge.on{display:flex}
+.pc-live-badge .dot{width:6px;height:6px;border-radius:50%;background:#fff;animation:blink 1.2s infinite}
+
+/* Modal instrucciones PC */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.75);
+  display:none;align-items:center;justify-content:center;
+  z-index:300;padding:20px;
+}
+.modal-overlay.on{display:flex}
+.modal{
+  background:#16161f;border:1px solid rgba(255,255,255,.12);
+  border-radius:20px;padding:28px 24px;max-width:340px;width:100%;
+  text-align:center;
+}
+.modal h3{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#fff;margin-bottom:10px}
+.modal p{font-size:13px;color:rgba(255,255,255,.55);line-height:1.6;margin-bottom:20px}
+.modal .step{
+  background:rgba(255,255,255,.05);border-radius:12px;
+  padding:10px 14px;margin-bottom:8px;
+  font-size:12px;color:rgba(255,255,255,.75);text-align:left;
+  display:flex;align-items:flex-start;gap:10px;
+}
+.modal .step b{color:#fff}
+.modal-btns{display:flex;gap:10px;margin-top:20px}
+.modal-btn{
+  flex:1;padding:12px;border-radius:12px;border:none;
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;
+  transition:transform .15s;
+}
+.modal-btn:active{transform:scale(.95)}
+.modal-btn-ok{background:var(--live);color:#fff}
+.modal-btn-cancel{background:rgba(255,255,255,.08);color:rgba(255,255,255,.6)}
+
+/* Aviso móvil */
 .mobile-notice{
   position:absolute;bottom:90px;left:50%;transform:translateX(-50%);
   background:rgba(0,0,0,.75);border:1px solid rgba(255,255,255,.15);
   border-radius:12px;padding:10px 16px;
   font-size:11px;color:rgba(255,255,255,.7);
-  text-align:center;line-height:1.5;
-  max-width:280px;white-space:normal;
-  pointer-events:none;
-  display:none;
+  text-align:center;line-height:1.5;max-width:280px;
+  pointer-events:none;display:none;
 }
 .mobile-notice.on{display:block}
 
@@ -115,6 +157,11 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'DM Sans',sans
   🔑 Código: <span id="room-id">conectando...</span>
 </div>
 
+<!-- Badge EN VIVO para PC (sobre el iframe, sin tapar) -->
+<div class="pc-live-badge" id="pc-live-badge">
+  <span class="dot"></span> Transmitiendo tienda
+</div>
+
 <!-- Tienda iframe -->
 <div class="frame-wrap">
   <iframe id="tienda"
@@ -122,12 +169,36 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'DM Sans',sans
     allow="camera;microphone;fullscreen" loading="lazy"></iframe>
 </div>
 
-<!-- Preview del stream -->
+<!-- Preview del stream — SOLO para móvil (cámara) -->
 <div class="preview-wrap" id="preview-wrap">
   <video id="preview-video" autoplay muted playsinline></video>
   <div class="preview-label"><span class="dot"></span> Transmitiendo en vivo</div>
   <div class="mobile-notice" id="mobile-notice">
-    📱 En móvil se transmite la cámara.<br>Apunta tu cámara a la pantalla o usa la cámara frontal para mostrarte tú.
+    📱 En móvil se transmite la cámara.<br>Apunta tu cámara a la pantalla o usa la cámara frontal.
+  </div>
+</div>
+
+<!-- Modal instrucciones PC (fallback si preferCurrentTab no disponible) -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h3>📺 Compartir la tienda</h3>
+    <p>Selecciona <b>Esta pestaña</b> en el diálogo del navegador para transmitir solo la tienda, sin efecto espejo.</p>
+    <div class="step">
+      <span>1️⃣</span>
+      <span>En el diálogo que abre el navegador, elige la pestaña <b>"Pestaña de Chrome"</b> o <b>"Esta pestaña"</b></span>
+    </div>
+    <div class="step">
+      <span>2️⃣</span>
+      <span>Selecciona esta misma ventana <b>"Transmisor — Tienda Live"</b></span>
+    </div>
+    <div class="step">
+      <span>3️⃣</span>
+      <span>Haz clic en <b>"Compartir"</b> y listo — los receptores verán la tienda en tiempo real</span>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn modal-btn-cancel" onclick="cancelarModal()">Cancelar</button>
+      <button class="modal-btn modal-btn-ok" onclick="iniciarCapturaPantalla()">Entendido, continuar</button>
+    </div>
   </div>
 </div>
 
@@ -182,44 +253,98 @@ function initPeer(){
 async function toggleTx(){ if(live) stopTx(); else await startTx(); }
 
 async function startTx(){
-  showLoader(isMobile ? 'Accediendo a cámara...' : 'Solicitando pantalla...');
-  try {
-    if(isMobile){
-      // MÓVIL: usa cámara (única opción disponible en Android/iOS)
+  if(isMobile){
+    // MÓVIL: cámara, como antes
+    showLoader('Accediendo a cámara...');
+    try {
       localStream = await navigator.mediaDevices.getUserMedia({
         video:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:720} },
         audio:false
       });
-      document.getElementById('mobile-notice').classList.add('on');
-    } else {
-      // ESCRITORIO: captura pantalla completa
-      localStream = await navigator.mediaDevices.getDisplayMedia({
-        video:{ frameRate:15, width:{ideal:1280}, height:{ideal:720} },
-        audio:false
-      });
+    } catch(e){
+      hideLoader();
+      handleMediaError(e);
+      return;
     }
+    var vid=document.getElementById('preview-video');
+    vid.srcObject=localStream;
+    document.getElementById('preview-wrap').classList.add('on');
+    document.getElementById('mobile-notice').classList.add('on');
+    onLive();
+  } else {
+    // ESCRITORIO: intentar capturar esta pestaña directamente (sin espejo)
+    // preferCurrentTab captura solo esta pestaña automáticamente en Chrome 94+
+    var supportsPreferCurrentTab = 'mediaDevices' in navigator && 
+      typeof navigator.mediaDevices.getDisplayMedia === 'function';
+    
+    if(supportsPreferCurrentTab){
+      // Intentar con preferCurrentTab primero (Chrome 94+, evita el selector)
+      showLoader('Capturando tienda...');
+      try {
+        localStream = await navigator.mediaDevices.getDisplayMedia({
+          video:{ 
+            preferCurrentTab: true,   // ← CLAVE: captura esta pestaña directamente
+            frameRate: 15, 
+            width:{ideal:1280}, 
+            height:{ideal:720}
+          },
+          audio: false,
+          selfBrowserSurface: 'include',   // permitir capturar la pestaña actual
+          surfaceSwitching: 'exclude'      // no permitir cambiar a otra superficie
+        });
+        // El video NO se muestra en preview para evitar efecto espejo
+        // Solo lo usamos para transmitir
+        onLive();
+        localStream.getVideoTracks()[0].onended = function(){ stopTx(); };
+      } catch(e){
+        hideLoader();
+        if(e.name !== 'NotAllowedError'){
+          // Si falla por otra razón, mostrar modal con instrucciones
+          document.getElementById('modal-overlay').classList.add('on');
+        } else {
+          toast('❌ Permiso denegado — acepta compartir la pestaña');
+        }
+      }
+    } else {
+      // Navegador sin soporte — mostrar instrucciones
+      document.getElementById('modal-overlay').classList.add('on');
+    }
+  }
+}
+
+function cancelarModal(){
+  document.getElementById('modal-overlay').classList.remove('on');
+}
+
+async function iniciarCapturaPantalla(){
+  document.getElementById('modal-overlay').classList.remove('on');
+  showLoader('Selecciona esta pestaña en el diálogo...');
+  try {
+    localStream = await navigator.mediaDevices.getDisplayMedia({
+      video:{ frameRate:15, width:{ideal:1280}, height:{ideal:720} },
+      audio:false
+    });
+    // IMPORTANTE: NO asignamos al preview-video para evitar el bucle espejo
+    // El stream va directo a PeerJS para los receptores
+    onLive();
+    localStream.getVideoTracks()[0].onended = function(){ stopTx(); };
   } catch(e){
     hideLoader();
-    if(e.name==='NotAllowedError')      toast('❌ Permiso denegado — acepta el acceso a cámara');
-    else if(e.name==='NotFoundError')   toast('❌ No se encontró cámara en este dispositivo');
-    else if(e.name==='NotSupportedError') toast('❌ Tu navegador no soporta esta función');
-    else                                toast('❌ Error: '+(e.message||e.name));
-    return;
+    if(e.name==='NotAllowedError') toast('❌ Cancelado — no se compartió ninguna pantalla');
+    else toast('❌ Error: '+(e.message||e.name));
   }
+}
 
-  var vid=document.getElementById('preview-video');
-  vid.srcObject=localStream;
-  document.getElementById('preview-wrap').classList.add('on');
+function onLive(){
   live=true;
   hideLoader();
-  setStatus('EN VIVO',true);
+  setStatus('EN VIVO', true);
   updateFab(true);
   document.getElementById('fab-wa').classList.add('on');
-
-  // Si el usuario cierra el stream desde el sistema
-  localStream.getVideoTracks()[0].onended=function(){ stopTx(); };
-
-  toast('🔴 Transmitiendo — comparte el código con receptores');
+  if(!isMobile){
+    document.getElementById('pc-live-badge').classList.add('on');
+  }
+  toast('🔴 Transmitiendo tienda — comparte el código con receptores');
 }
 
 function stopTx(){
@@ -229,10 +354,18 @@ function stopTx(){
   document.getElementById('preview-wrap').classList.remove('on');
   document.getElementById('preview-video').srcObject=null;
   document.getElementById('mobile-notice').classList.remove('on');
+  document.getElementById('pc-live-badge').classList.remove('on');
   setStatus('Listo',false);
   updateFab(false);
   document.getElementById('fab-wa').classList.remove('on');
   toast('⏹ Transmisión detenida');
+}
+
+function handleMediaError(e){
+  if(e.name==='NotAllowedError')      toast('❌ Permiso denegado — acepta el acceso a cámara');
+  else if(e.name==='NotFoundError')   toast('❌ No se encontró cámara en este dispositivo');
+  else if(e.name==='NotSupportedError') toast('❌ Tu navegador no soporta esta función');
+  else                                toast('❌ Error: '+(e.message||e.name));
 }
 
 function setStatus(t,on){

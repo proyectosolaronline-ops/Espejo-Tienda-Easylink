@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Easylink — Transmisor</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --lime:#c8f03a;--lime-dim:rgba(200,240,58,.12);--lime-border:rgba(200,240,58,.28);
+  --red:#ef4444;--red-dim:rgba(239,68,68,.12);--red-border:rgba(239,68,68,.3);
+  --green:#22c55e;
+  --bg:#0a0a0a;--surface:rgba(255,255,255,.04);--border:rgba(255,255,255,.08);
+  --text:rgba(255,255,255,.9);--muted:rgba(255,255,255,.45);--hint:rgba(255,255,255,.22);
+  --r:14px;--rSm:10px;--rPill:99px;
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
+  font-family:'DM Sans',system-ui,sans-serif;color:var(--text);}
+
+/* ── SPLIT LAYOUT ── */
+#app{display:flex;flex-direction:column;height:100%;width:100%;}
+
+/* IFRAME ZONE */
+#preview-zone{
+  flex:1;position:relative;overflow:hidden;background:#050505;
+  border-bottom:1px solid var(--border);
+}
+#store-frame{
+  position:absolute;inset:0;width:100%;height:100%;border:none;
+  transition:opacity .4s;
+}
+#store-frame.hidden{opacity:0;pointer-events:none;}
+
+/* EMPTY STATE */
+#empty-state{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;
+  color:var(--muted);font-size:13px;text-align:center;padding:24px;
+}
+#empty-state svg{opacity:.2;}
+#empty-state p{color:var(--hint);font-size:12px;max-width:180px;line-height:1.7;}
+
+/* LIVE BADGE */
+#live-badge{
+  position:absolute;top:12px;right:12px;z-index:10;
+  display:none;align-items:center;gap:5px;
+  background:rgba(0,0,0,.7);backdrop-filter:blur(8px);
+  border:1px solid var(--red-border);
+  padding:5px 10px;border-radius:var(--rPill);
+  font-size:10px;font-weight:700;font-family:'Syne',sans-serif;
+  color:#f87171;letter-spacing:.08em;
+}
+#live-badge.on{display:flex;}
+#live-dot{width:5px;height:5px;border-radius:50%;background:var(--red);animation:blink 1s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* VIEWERS BADGE */
+#viewers-badge{
+  position:absolute;top:12px;left:12px;z-index:10;
+  display:none;align-items:center;gap:5px;
+  background:rgba(0,0,0,.7);backdrop-filter:blur(8px);
+  border:1px solid var(--lime-border);
+  padding:5px 10px;border-radius:var(--rPill);
+  font-size:10px;font-weight:700;font-family:'Syne',sans-serif;
+  color:var(--lime);
+}
+#viewers-badge.on{display:flex;}
+
+/* ── HUD INFERIOR ── */
+#hud{
+  flex-shrink:0;
+  padding:16px 16px calc(16px + var(--safe-bottom));
+  background:var(--bg);
+  display:flex;flex-direction:column;gap:10px;
+}
+
+/* HEADER */
+#hud-header{display:flex;align-items:center;justify-content:space-between;}
+#logo{
+  display:flex;align-items:center;gap:7px;
+  font-family:'Syne',sans-serif;font-size:13px;font-weight:800;
+  color:var(--lime);letter-spacing:.1em;text-transform:uppercase;
+}
+#logo-icon{
+  width:26px;height:26px;border-radius:8px;
+  background:var(--lime-dim);border:1px solid var(--lime-border);
+  display:flex;align-items:center;justify-content:center;
+}
+#status-pill{
+  display:flex;align-items:center;gap:5px;
+  padding:4px 10px;border-radius:var(--rPill);
+  background:var(--surface);border:1px solid var(--border);
+  font-size:10px;font-weight:600;color:var(--muted);
+  font-family:'Syne',sans-serif;letter-spacing:.04em;
+  transition:all .3s;
+}
+#status-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);transition:background .3s;}
+#status-dot.live{background:var(--green);animation:pulse 1.5s infinite;}
+#status-dot.off{background:var(--red);}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}50%{box-shadow:0 0 0 5px rgba(34,197,94,0)}}
+
+/* URL BAR */
+#url-bar{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 12px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);cursor:pointer;transition:border-color .2s;
+}
+#url-bar:active{border-color:rgba(255,255,255,.2);}
+#url-bar-icon{flex-shrink:0;color:var(--muted);}
+#url-bar-text{
+  flex:1;font-size:12px;font-family:'DM Mono',monospace;
+  color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#url-bar-text.set{color:var(--lime);}
+#url-bar-edit{
+  font-size:10px;font-weight:600;color:var(--hint);
+  font-family:'Syne',sans-serif;flex-shrink:0;
+}
+
+/* LINK ROW */
+#link-row{
+  display:none;align-items:center;gap:8px;
+  padding:9px 12px;
+  background:var(--lime-dim);border:1px solid var(--lime-border);
+  border-radius:var(--r);
+}
+#link-row.on{display:flex;}
+#link-val{
+  flex:1;font-size:10px;font-family:'DM Mono',monospace;color:var(--lime);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#btn-copy{
+  background:rgba(200,240,58,.18);border:1px solid var(--lime-border);
+  color:var(--lime);font-size:10px;font-weight:700;
+  padding:5px 12px;border-radius:8px;cursor:pointer;
+  white-space:nowrap;font-family:'Syne',sans-serif;letter-spacing:.03em;
+  transition:background .15s;
+}
+#btn-copy:active{background:rgba(200,240,58,.3);}
+
+/* HINT */
+#tab-hint{
+  display:none;align-items:center;gap:7px;
+  padding:8px 12px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--rSm);font-size:11px;color:var(--muted);line-height:1.5;
+}
+#tab-hint.on{display:flex;}
+#tab-hint span{color:var(--lime);font-weight:600;}
+
+/* BTN ROW */
+#btn-row{display:flex;gap:8px;}
+
+#btn-live{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:15px;border:none;border-radius:var(--r);cursor:pointer;
+  font-family:'Syne',sans-serif;font-size:14px;font-weight:800;letter-spacing:.03em;
+  background:var(--lime);color:#1a2600;
+  transition:background .2s,transform .15s;
+}
+#btn-live:active{transform:scale(.97);}
+#btn-live.live{background:var(--red);color:#fff;}
+#btn-live:disabled{opacity:.38;cursor:not-allowed;}
+
+#btn-wa{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:15px 18px;border:none;border-radius:var(--r);cursor:pointer;
+  font-family:'Syne',sans-serif;font-size:12px;font-weight:700;
+  background:#25d366;color:#fff;
+  transition:all .2s;opacity:.3;pointer-events:none;
+}
+#btn-wa.ready{opacity:1;pointer-events:all;}
+#btn-wa:active{transform:scale(.97);}
+
+/* ── MODAL ── */
+#modal{
+  position:fixed;inset:0;z-index:999;
+  background:rgba(0,0,0,.88);backdrop-filter:blur(12px);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+#modal.hidden{display:none;}
+#modal-box{
+  background:#111;border:1px solid var(--border);
+  border-radius:24px 24px 0 0;
+  padding:28px 20px calc(28px + var(--safe-bottom));
+  width:100%;max-width:480px;
+  animation:slide-up .32s cubic-bezier(.16,1,.3,1);
+}
+@keyframes slide-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+#modal-title{
+  font-family:'Syne',sans-serif;font-size:20px;font-weight:800;
+  color:var(--text);margin-bottom:8px;
+}
+#modal-sub{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:20px;}
+#modal-input{
+  width:100%;padding:13px 16px;
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--lime-border);border-radius:var(--r);
+  color:var(--lime);font-size:13px;font-family:'DM Mono',monospace;
+  outline:none;margin-bottom:14px;
+  transition:border-color .2s;
+}
+#modal-input:focus{border-color:rgba(200,240,58,.6);}
+#modal-input::placeholder{color:var(--hint);}
+#modal-ok{
+  width:100%;padding:15px;border:none;border-radius:var(--r);
+  font-family:'Syne',sans-serif;font-size:15px;font-weight:800;letter-spacing:.02em;
+  background:var(--lime);color:#1a2600;cursor:pointer;
+  transition:background .2s,transform .15s;
+}
+#modal-ok:active{transform:scale(.98);}
+
+/* TOAST */
+#toast{
+  position:fixed;top:16px;left:50%;
+  transform:translateX(-50%) translateY(-20px);
+  background:var(--lime);color:#1a2600;
+  font-size:12px;font-weight:700;font-family:'Syne',sans-serif;
+  padding:9px 20px;border-radius:var(--rPill);
+  z-index:1000;display:none;white-space:nowrap;letter-spacing:.02em;
+  box-shadow:0 4px 20px rgba(200,240,58,.3);
+}
+#toast.show{display:block;animation:toast-in .22s ease forwards;}
+@keyframes toast-in{
+  from{opacity:0;transform:translateX(-50%) translateY(-20px)}
+  to{opacity:1;transform:translateX(-50%) translateY(0)}
+}
+
+/* TRANSMISOR IFRAME OCULTO */
+#transmisor-host{
+  position:fixed;width:1px;height:1px;opacity:0;
+  pointer-events:none;top:-9999px;left:-9999px;
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ZONA PREVIEW -->
+  <div id="preview-zone">
+    <iframe id="store-frame" class="hidden" src="about:blank"
+      allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture"
+      allowfullscreen></iframe>
+
+    <div id="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round">
+        <rect x="3" y="3" width="18" height="14" rx="2"/>
+        <path d="M8 21h8M12 17v4"/>
+        <circle cx="12" cy="10" r="3"/>
+        <path d="M5 10a7 7 0 0014 0"/>
+      </svg>
+      <strong style="font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:rgba(255,255,255,.5);">Sin tienda cargada</strong>
+      <p>Pega la URL de tu tienda para comenzar la transmisión en vivo.</p>
+    </div>
+
+    <div id="live-badge"><div id="live-dot"></div> EN VIVO</div>
+    <div id="viewers-badge" id="viewers-badge">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span id="viewers-count">0</span>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud">
+
+    <div id="hud-header">
+      <div id="logo">
+        <div id="logo-icon">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="#c8f03a">
+            <circle cx="12" cy="12" r="4.5"/>
+            <path d="M2 12a10 10 0 0120 0M6 12a6 6 0 0112 0" stroke="#c8f03a" stroke-width="2" fill="none" stroke-linecap="round"/>
+          </svg>
+        </div>
+        EASYLINK
+      </div>
+      <div id="status-pill">
+        <div id="status-dot"></div>
+        <span id="status-text">Iniciando...</span>
+      </div>
+    </div>
+
+    <div id="url-bar" onclick="openModal()">
+      <div id="url-bar-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      </div>
+      <span id="url-bar-text">Pega la URL de tu tienda...</span>
+      <span id="url-bar-edit">Editar</span>
+    </div>
+
+    <div id="tab-hint">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c8f03a" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+      Selecciona <span>Esta pestaña</span> al compartir pantalla
+    </div>
+
+    <div id="link-row">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c8f03a" stroke-width="2.2" stroke-linecap="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      <span id="link-val"></span>
+      <button id="btn-copy" onclick="copyLink()">Copiar</button>
+    </div>
+
+    <div id="btn-row">
+      <button id="btn-live" onclick="toggleStream()" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="5"/>
+          <path d="M2 12a10 10 0 0120 0M6 12a6 6 0 0112 0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+        Transmitir
+      </button>
+      <button id="btn-wa" onclick="sendWhatsApp()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        Enviar
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal">
+  <div id="modal-box">
+    <div id="modal-title">🛍 URL de tu tienda</div>
+    <p id="modal-sub">Pega la dirección de tu tienda. Se cargará aquí y podrás transmitirla en vivo a tus clientes.</p>
+    <input id="modal-input" type="url"
+      placeholder="https://mi-tienda.github.io/?store=ID"
+      autocomplete="off" spellcheck="false"/>
+    <button id="modal-ok" onclick="cargarTienda()">Cargar tienda →</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- IFRAME OCULTO QUE HOSTEA EL TRANSMISOR ORIGINAL -->
+<iframe id="transmisor-host" src="about:blank"></iframe>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+/* ──────────────────────────────────────
+   CONFIG
+────────────────────────────────────── */
+var RECEPTOR_BASE = (function(){
+  return location.href.replace(/[^/]*$/, '') + 'receptor.html';
+})();
+
+/* ──────────────────────────────────────
+   ESTADO
+────────────────────────────────────── */
+var peer, myPeerID, clientLink = '';
+var connections = {}, calls = {};
+var displayStream = null;
+var isLive = false;
+var tiendaURL = '';
+var viewerCount = 0;
+
+/* ──────────────────────────────────────
+   CARGA INICIAL
+────────────────────────────────────── */
+(function(){
+  var p = new URLSearchParams(location.search);
+  var u = p.get('url') || p.get('store') || localStorage.getItem('ld_demo_url') || '';
+  if(u){ tiendaURL = u; cargarIframe(u); document.getElementById('modal').classList.add('hidden'); }
+})();
+
+/* ──────────────────────────────────────
+   UI HELPERS
+────────────────────────────────────── */
+function setStatus(txt, state){
+  document.getElementById('status-text').textContent = txt;
+  var d = document.getElementById('status-dot');
+  d.className = state === 'live' ? 'live' : state === 'off' ? 'off' : '';
+}
+
+function updateViewers(){
+  var n = viewerCount;
+  document.getElementById('viewers-count').textContent = n;
+  document.getElementById('viewers-badge').classList.toggle('on', n > 0);
+  if(isLive) setStatus(n > 0 ? n + ' viendo' : 'En vivo', 'live');
+}
+
+function showToast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show';
+  clearTimeout(t._t);
+  t._t = setTimeout(function(){ t.className = ''; }, 2600);
+}
+
+function reconstruirLink(){
+  clientLink = RECEPTOR_BASE + '?host=' + encodeURIComponent(myPeerID);
+  if(tiendaURL) clientLink += '&url=' + encodeURIComponent(tiendaURL);
+  document.getElementById('link-val').textContent = clientLink;
+  document.getElementById('link-row').classList.add('on');
+  document.getElementById('btn-wa').classList.add('ready');
+  document.getElementById('tab-hint').classList.add('on');
+}
+
+/* ──────────────────────────────────────
+   MODAL
+────────────────────────────────────── */
+function openModal(){ document.getElementById('modal').classList.remove('hidden'); }
+
+function cargarTienda(){
+  var v = document.getElementById('modal-input').value.trim();
+  if(!v){ showToast('Pega la URL de tu tienda'); return; }
+  if(!/^https?:\/\//i.test(v)){ showToast('La URL debe empezar con https://'); return; }
+  tiendaURL = v;
+  localStorage.setItem('ld_demo_url', v);
+  cargarIframe(v);
+  document.getElementById('modal').classList.add('hidden');
+  if(myPeerID) reconstruirLink();
+}
+
+function cargarIframe(url){
+  var f = document.getElementById('store-frame');
+  f.src = url;
+  f.classList.remove('hidden');
+  document.getElementById('empty-state').style.display = 'none';
+  var bar = document.getElementById('url-bar-text');
+  bar.textContent = url;
+  bar.classList.add('set');
+}
+
+document.getElementById('modal-input').addEventListener('keydown', function(e){
+  if(e.key === 'Enter') cargarTienda();
+});
+
+/* ──────────────────────────────────────
+   PEER JS
+────────────────────────────────────── */
+function initPeer(){
+  setStatus('Conectando...','');
+  peer = new Peer({
+    debug:0,
+    config:{
+      iceServers:[
+        {urls:'stun:stun.l.google.com:19302'},
+        {urls:'stun:stun1.l.google.com:19302'},
+        {urls:'turn:a.relay.metered.ca:80',username:'open',credential:'open'},
+        {urls:'turn:a.relay.metered.ca:443',username:'open',credential:'open'},
+        {urls:'turn:a.relay.metered.ca:443?transport=tcp',username:'open',credential:'open'}
+      ],
+      iceCandidatePoolSize:10
+    }
+  });
+
+  peer.on('open', function(id){
+    myPeerID = id;
+    reconstruirLink();
+    setStatus('Listo','');
+    document.getElementById('btn-live').disabled = false;
+  });
+
+  peer.on('connection', function(conn){
+    conn.on('open', function(){
+      connections[conn.peer] = conn;
+      viewerCount = Object.keys(connections).length;
+      updateViewers();
+      conn.send({type:'store-url', url:tiendaURL});
+      if(isLive && displayStream) callPeer(conn.peer);
+    });
+    conn.on('data', function(d){
+      if(d && d.type === 'viewer-hello' && isLive && displayStream) callPeer(conn.peer);
+    });
+    conn.on('close',  function(){ removePeer(conn.peer); });
+    conn.on('error',  function(){ removePeer(conn.peer); });
+  });
+
+  peer.on('error', function(e){
+    setStatus('Error — reintentando...','off');
+    setTimeout(function(){ try{peer.destroy();}catch(x){} initPeer(); }, 3000);
+  });
+
+  peer.on('disconnected', function(){
+    setStatus('Reconectando...','off');
+    peer.reconnect();
+  });
+}
+
+function removePeer(pid){
+  delete connections[pid];
+  if(calls[pid]){ try{calls[pid].close();}catch(x){} delete calls[pid]; }
+  viewerCount = Object.keys(connections).length;
+  updateViewers();
+}
+
+function callPeer(pid){
+  if(!displayStream || calls[pid]) return;
+  try{
+    var call = peer.call(pid, displayStream);
+    calls[pid] = call;
+    call.on('error', function(){ delete calls[pid]; });
+    call.on('close', function(){ delete calls[pid]; });
+  }catch(e){}
+}
+
+/* ──────────────────────────────────────
+   STREAM
+────────────────────────────────────── */
+function toggleStream(){ isLive ? stopStream() : startStream(); }
+
+async function startStream(){
+  if(!tiendaURL){
+    showToast('Primero carga la URL de la tienda');
+    openModal(); return;
+  }
+  try{
+    displayStream = await navigator.mediaDevices.getDisplayMedia({
+      video:{displaySurface:'browser',frameRate:{ideal:30,max:30},
+             width:{ideal:1920},height:{ideal:1080},cursor:'always'},
+      audio:true, preferCurrentTab:true
+    });
+    isLive = true;
+    displayStream.getVideoTracks()[0].addEventListener('ended', stopStream);
+
+    var btn = document.getElementById('btn-live');
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Detener';
+    btn.classList.add('live');
+    document.getElementById('live-badge').classList.add('on');
+    document.getElementById('tab-hint').classList.remove('on');
+    setStatus(viewerCount > 0 ? viewerCount + ' viendo' : 'En vivo', 'live');
+    Object.keys(connections).forEach(callPeer);
+    showToast('✓ Transmisión iniciada');
+  }catch(e){
+    showToast(e.name === 'NotAllowedError'
+      ? 'Permite compartir pantalla' : 'Error al capturar pantalla');
+    isLive = false; displayStream = null;
+  }
+}
+
+function stopStream(){
+  if(displayStream){ displayStream.getTracks().forEach(function(t){t.stop();}); displayStream = null; }
+  Object.keys(calls).forEach(function(p){ try{calls[p].close();}catch(x){} });
+  calls = {}; isLive = false;
+  var btn = document.getElementById('btn-live');
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/><path d="M2 12a10 10 0 0120 0M6 12a6 6 0 0112 0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Transmitir';
+  btn.classList.remove('live');
+  document.getElementById('live-badge').classList.remove('on');
+  document.getElementById('tab-hint').classList.add('on');
+  setStatus('Detenido','off');
+  showToast('Transmisión detenida');
+}
+
+/* ──────────────────────────────────────
+   WA + COPY
+────────────────────────────────────── */
+function sendWhatsApp(){
+  if(!clientLink){ showToast('Espera al link'); return; }
+  var msg = '👀 *Mira mi tienda en vivo*\n\n' + clientLink;
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+}
+
+function copyLink(){
+  if(!clientLink) return;
+  navigator.clipboard.writeText(clientLink).then(function(){
+    showToast('✓ Link copiado');
+  }).catch(function(){
+    var ta = document.createElement('textarea');
+    ta.value = clientLink; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    showToast('✓ Link copiado');
+  });
+}
+
+/* ──────────────────────────────────────
+   ARRANQUE
+────────────────────────────────────── */
+initPeer();
+</script>
+</body>
+</html>

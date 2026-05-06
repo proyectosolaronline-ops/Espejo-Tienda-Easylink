@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Transmisor — Easylink Demo</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Inter',system-ui,sans-serif}
+
+#tienda-frame{
+  position:fixed;inset:0;width:100%;height:100%;
+  border:none;z-index:1;background:#fff;
+}
+
+#hud{
+  position:fixed;bottom:0;left:0;right:0;z-index:100;
+  padding:10px 12px 20px;
+  background:linear-gradient(to top,rgba(0,0,0,.96) 0%,rgba(0,0,0,.7) 70%,transparent 100%);
+  display:flex;flex-direction:column;gap:8px;
+}
+#status-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:6px 10px;background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.1);border-radius:10px;
+}
+#status-dot{width:8px;height:8px;border-radius:50%;background:#f59e0b;flex-shrink:0;transition:background .3s}
+#status-dot.live{background:#22c55e;animation:pulse 1.5s infinite}
+#status-dot.off{background:#ef4444}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}50%{box-shadow:0 0 0 5px rgba(34,197,94,0)}}
+#status-text{font-size:12px;font-weight:600;color:#fff;flex:1;margin-left:7px;letter-spacing:.02em}
+#viewers-badge{font-size:10px;font-weight:700;background:#a3e635;color:#14532d;padding:2px 8px;border-radius:99px;display:none;}
+#viewers-badge.on{display:block}
+
+#link-box{display:none;align-items:center;gap:8px;padding:8px 10px;background:rgba(163,230,53,.08);border:1px solid rgba(163,230,53,.3);border-radius:10px;}
+#link-box.on{display:flex}
+#link-text{flex:1;font-size:10px;color:#a3e635;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:monospace;}
+#btn-copy{background:rgba(163,230,53,.15);border:1px solid rgba(163,230,53,.4);color:#a3e635;font-size:11px;font-weight:700;padding:4px 10px;border-radius:7px;cursor:pointer;white-space:nowrap;font-family:inherit;}
+
+#btn-row{display:flex;gap:8px;}
+#btn-transmitir{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:7px;
+  padding:13px;border-radius:12px;border:none;cursor:pointer;
+  font-size:14px;font-weight:700;font-family:inherit;
+  background:#a3e635;color:#14532d;transition:all .2s;
+}
+#btn-transmitir.live{background:#ef4444;color:#fff;}
+#btn-transmitir:disabled{opacity:.45;cursor:not-allowed;}
+#btn-wa{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:13px 16px;border-radius:12px;border:none;cursor:pointer;
+  font-size:13px;font-weight:700;font-family:inherit;
+  background:#25d366;color:#fff;transition:all .2s;
+  opacity:.4;pointer-events:none;
+}
+#btn-wa.ready{opacity:1;pointer-events:all;}
+
+#top-bar{
+  position:fixed;top:0;left:0;right:0;z-index:99;
+  padding:10px 14px;
+  display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(to bottom,rgba(0,0,0,.85) 0%,transparent 100%);
+  pointer-events:none;
+}
+#logo-label{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:#a3e635;letter-spacing:.04em;}
+#live-pill{display:none;align-items:center;gap:5px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.5);padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700;color:#ef4444;}
+#live-pill.on{display:flex;}
+#live-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:pulse 1s infinite}
+
+#toast{
+  position:fixed;top:16px;left:50%;transform:translateX(-50%);
+  background:#a3e635;color:#14532d;font-size:12px;font-weight:700;
+  padding:8px 18px;border-radius:99px;z-index:200;display:none;white-space:nowrap;
+  box-shadow:0 4px 20px rgba(163,230,53,.4);
+}
+</style>
+</head>
+<body>
+
+<iframe id="tienda-frame" src="about:blank" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>
+
+<div id="top-bar">
+  <div id="logo-label">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="#a3e635"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+    EASYLINK DEMO
+  </div>
+  <div id="live-pill"><div id="live-dot"></div>EN VIVO</div>
+</div>
+
+<div id="hud">
+  <div id="status-bar">
+    <div id="status-dot"></div>
+    <span id="status-text">Iniciando...</span>
+    <span id="viewers-badge">👁 <span id="viewers-count">0</span></span>
+  </div>
+  <div id="link-box">
+    <span id="link-text"></span>
+    <button id="btn-copy" onclick="copyLink()">Copiar</button>
+  </div>
+  <div id="btn-row">
+    <button id="btn-transmitir" onclick="toggleStream()" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/><path d="M2 12a10 10 0 0120 0M6 12a6 6 0 0112 0" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+      Transmitir
+    </button>
+    <button id="btn-wa" onclick="sendWhatsApp()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Enviar link
+    </button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ── TIENDA DEFAULT ── */
+var TIENDA_URL = 'https://proyectosolaronline-ops.github.io/superOnline-Tienda/index.html?backend=https%3A%2F%2Fscript.google.com%2Fmacros%2Fs%2FAKfycbwQ_ESx2c-3DL83b_-ujjmvevSBGtwjPZ0e1wEHv3cnLbJOplTJDYUb_UiRVyTYXik%2Fexec&store=store_f2fcc889b992';
+
+var RECEPTOR_BASE = location.href.replace(/transmisor\.html.*$/, '') + 'receptor.html';
+
+var ICE = [
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun1.l.google.com:19302'},
+  {urls:'turn:a.relay.metered.ca:80',  username:'open',credential:'open'},
+  {urls:'turn:a.relay.metered.ca:443', username:'open',credential:'open'},
+  {urls:'turn:a.relay.metered.ca:443?transport=tcp',username:'open',credential:'open'}
+];
+
+var peer, myPeerID, clientLink = '';
+var connections = {}, activeCalls = {};
+var displayStream = null, isLive = false, viewerCount = 0;
+
+/* Cargar tienda inmediatamente */
+document.getElementById('tienda-frame').src = TIENDA_URL;
+
+function setStatus(txt, state){
+  document.getElementById('status-text').textContent = txt;
+  var d = document.getElementById('status-dot');
+  d.className = state === 'live' ? 'live' : state === 'off' ? 'off' : '';
+}
+
+function initPeer(){
+  setStatus('Conectando a la red...','');
+  peer = new Peer({ debug:0, config:{ iceServers:ICE, iceCandidatePoolSize:10 } });
+
+  peer.on('open', function(id){
+    myPeerID = id;
+    clientLink = RECEPTOR_BASE + '?host=' + encodeURIComponent(id);
+    document.getElementById('link-text').textContent = clientLink;
+    document.getElementById('link-box').classList.add('on');
+    document.getElementById('btn-wa').classList.add('ready');
+    document.getElementById('btn-transmitir').disabled = false;
+    setStatus('Listo — pulsa Transmitir','');
+  });
+
+  peer.on('connection', function(conn){
+    conn.on('open', function(){
+      connections[conn.peer] = conn;
+      viewerCount = Object.keys(connections).length;
+      updateViewers();
+      if(isLive && displayStream) callViewer(conn.peer);
+    });
+    conn.on('data', function(d){
+      if(d && d.type === 'viewer-ready' && isLive && displayStream) callViewer(conn.peer);
+    });
+    conn.on('close', function(){
+      delete connections[conn.peer];
+      if(activeCalls[conn.peer]){ try{activeCalls[conn.peer].close();}catch(x){} delete activeCalls[conn.peer]; }
+      viewerCount = Object.keys(connections).length;
+      updateViewers();
+    });
+  });
+
+  peer.on('error', function(e){
+    setStatus('Reconectando...','off');
+    setTimeout(function(){ try{peer.destroy();}catch(x){} initPeer(); }, 3000);
+  });
+}
+
+function updateViewers(){
+  document.getElementById('viewers-count').textContent = viewerCount;
+  document.getElementById('viewers-badge').classList.toggle('on', viewerCount > 0);
+  if(isLive) setStatus(viewerCount > 0 ? viewerCount+' viendo en vivo':'En vivo — esperando...','live');
+}
+
+function callViewer(pid){
+  if(!displayStream) return;
+  if(activeCalls[pid]){ try{activeCalls[pid].close();}catch(x){} }
+  try{
+    var c = peer.call(pid, displayStream);
+    activeCalls[pid] = c;
+    c.on('close', function(){ delete activeCalls[pid]; });
+  }catch(e){ console.warn(e); }
+}
+
+function toggleStream(){ isLive ? stopStream() : startStream(); }
+
+async function startStream(){
+  try{
+    displayStream = await navigator.mediaDevices.getDisplayMedia({
+      video:{ frameRate:{ideal:30,max:30}, cursor:'always' },
+      audio: false
+    });
+    displayStream.getVideoTracks()[0].addEventListener('ended', stopStream);
+    isLive = true;
+    var btn = document.getElementById('btn-transmitir');
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Detener';
+    btn.classList.add('live');
+    document.getElementById('live-pill').classList.add('on');
+    setStatus(viewerCount > 0 ? viewerCount+' viendo en vivo':'En vivo — link listo','live');
+    Object.keys(connections).forEach(function(pid){ callViewer(pid); });
+    showToast('¡Transmisión iniciada!');
+  }catch(e){
+    if(e.name !== 'NotAllowedError') showToast('Error al capturar pantalla');
+    isLive = false; displayStream = null;
+  }
+}
+
+function stopStream(){
+  if(displayStream){ displayStream.getTracks().forEach(function(t){t.stop();}); displayStream = null; }
+  Object.keys(activeCalls).forEach(function(pid){ try{activeCalls[pid].close();}catch(x){} });
+  activeCalls = {};
+  isLive = false;
+  var btn = document.getElementById('btn-transmitir');
+  btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/><path d="M2 12a10 10 0 0120 0M6 12a6 6 0 0112 0" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg> Transmitir';
+  btn.classList.remove('live');
+  document.getElementById('live-pill').classList.remove('on');
+  setStatus('Transmisión detenida','off');
+  showToast('Transmisión detenida');
+}
+
+function sendWhatsApp(){
+  if(!clientLink){ showToast('Espera un momento...'); return; }
+  window.open('https://wa.me/?text='+encodeURIComponent('👀 *Ve mi tienda en vivo*\n\nAbre este link:\n'+clientLink),'_blank');
+}
+
+function copyLink(){
+  if(!clientLink) return;
+  navigator.clipboard.writeText(clientLink).then(function(){ showToast('Link copiado'); }).catch(function(){
+    var ta = document.createElement('textarea'); ta.value = clientLink;
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    showToast('Link copiado');
+  });
+}
+
+function showToast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._t); t._t = setTimeout(function(){ t.style.display='none'; }, 2500);
+}
+
+initPeer();
+</script>
+</body>
+</html>

@@ -2,121 +2,137 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Live Experience</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Tienda Live Experience</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         :root { --primary: #a3e635; --dark: #000; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body, html { width: 100%; height: 100%; background: var(--dark); font-family: sans-serif; overflow: hidden; }
-
-        /* Contenedor Principal */
-        #main-wrapper { position: relative; width: 100%; height: 100%; }
-
-        /* Capa 1: El Video del Vendedor (Emulación Celular) */
-        #vendedor-view {
-            position: absolute; inset: 0; z-index: 10;
-            display: flex; align-items: center; justify-content: center;
-            background: #000; transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        video { width: 100%; height: 100%; object-fit: contain; }
-
-        /* Capa 2: La Tienda Interactiva del Cliente */
-        #cliente-view {
-            position: absolute; inset: 0; z-index: 5;
-            background: #fff; transform: translateY(100%);
-            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        iframe { width: 100%; height: 100%; border: none; }
-
-        /* Botón Flotante para Intercalar */
-        #switch-btn {
-            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-            z-index: 100; background: var(--primary); color: #064e3b;
-            padding: 12px 24px; border-radius: 30px; font-weight: 800;
-            border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-            display: none; cursor: pointer; text-transform: uppercase; font-size: 14px;
-        }
-
-        /* Overlay de Inicio */
-        #overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.9);
-            z-index: 200; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; text-align: center; color: white;
-        }
-        #btn-go {
-            background: var(--primary); color: #064e3b; border: none;
-            width: 100px; height: 100px; border-radius: 50%; font-weight: 900;
-            margin-top: 20px; cursor: pointer;
-        }
-
-        .view-active-video #vendedor-view { transform: translateY(0); }
-        .view-active-video #cliente-view { transform: translateY(100%); }
         
-        .view-active-shop #vendedor-view { transform: translateY(-100%); }
-        .view-active-shop #cliente-view { transform: translateY(0); }
+        body, html { 
+            width: 100%; height: 100%; 
+            background: var(--dark); overflow: hidden; 
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        /* 1. TIENDA DE FONDO */
+        #tienda-iframe {
+            position: absolute; inset: 0;
+            width: 100%; height: 100%;
+            border: none; z-index: 1;
+            background: #fff;
+        }
+
+        /* 2. CONTENEDOR DE VIDEO FLOTANTE / MAXIMIZABLE */
+        #video-container {
+            position: absolute;
+            top: 20px; right: 15px;
+            width: 120px; height: 210px;
+            border-radius: 16px;
+            overflow: hidden;
+            z-index: 100;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 2px solid var(--primary);
+            background: #000;
+            display: none;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        /* Clase para maximizar */
+        #video-container.maximized {
+            top: 0; right: 0;
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 0;
+            border: none;
+            z-index: 150;
+        }
+        
+        video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+
+        /* INDICADOR EN VIVO */
+        .live-tag {
+            position: absolute; top: 10px; left: 10px;
+            background: #ef4444; color: white;
+            padding: 4px 10px; border-radius: 6px;
+            font-size: 10px; font-weight: bold;
+            z-index: 10; pointer-events: none;
+            display: flex; align-items: center; gap: 4px;
+        }
+        .dot { width: 6px; height: 6px; background: white; border-radius: 50%; animation: blink 1s infinite; }
+
+        /* BOTÓN DE ENTRADA */
+        #btn-join {
+            position: fixed; inset: 0; margin: auto;
+            width: 150px; height: 150px; border-radius: 50%;
+            background: var(--primary); border: none; color: #064e3b;
+            font-weight: 900; font-size: 16px; cursor: pointer;
+            z-index: 200; box-shadow: 0 0 50px rgba(163,230,53,0.5);
+        }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     </style>
 </head>
-<body class="view-active-video">
+<body>
 
-    <div id="overlay">
-        <h2>CONEXIÓN EN VIVO</h2>
-        <p>Estás entrando a la tienda de un asesor</p>
-        <button id="btn-go" onclick="startExperience()">ENTRAR</button>
-    </div>
+    <button id="btn-join" onclick="startExperience()">ENTRAR AL LIVE</button>
 
-    <div id="main-wrapper">
-        <button id="switch-btn" onclick="toggleView()">Ver mi navegación</button>
+    <iframe id="tienda-iframe" src="about:blank"></iframe>
 
-        <div id="vendedor-view">
-            <video id="remote-video" autoplay playsinline></video>
-        </div>
-
-        <div id="cliente-view">
-            <iframe id="tienda-iframe" src=""></iframe>
-        </div>
+    <div id="video-container" onclick="toggleSize(this)">
+        <div class="live-tag"><span class="dot"></span> VIVO</div>
+        <video id="remote-video" autoplay playsinline muted></video>
     </div>
 
 <script>
     const params = new URLSearchParams(window.location.search);
     const hostId = params.get('host');
     const tiendaUrl = params.get('url');
-    let currentMode = 'vendedor'; // vendedor o cliente
+
+    if(tiendaUrl) document.getElementById('tienda-iframe').src = tiendaUrl;
+
+    function toggleSize(el) {
+        el.classList.toggle('maximized');
+        const video = document.getElementById('remote-video');
+        // Quitamos el mute al maximizar por primera vez para asegurar audio
+        video.muted = false;
+    }
 
     function startExperience() {
-        if (!hostId) return alert("Error de conexión");
+        if (!hostId) return alert("Falta ID del vendedor");
         
-        document.getElementById('overlay').style.display = 'none';
-        document.getElementById('switch-btn').style.display = 'block';
-        if(tiendaUrl) document.getElementById('tienda-iframe').src = tiendaUrl;
+        document.getElementById('btn-join').style.display = 'none';
+        const container = document.getElementById('video-container');
+        container.style.display = 'block';
 
-        const peer = new Peer();
-        peer.on('open', () => {
-            peer.connect(hostId);
+        const peer = new Peer({
+            config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] }
+        });
+
+        peer.on('open', (id) => {
+            console.log("Conectado con ID:", id);
+            // Intentar conectar al host
+            const conn = peer.connect(hostId);
+            
             peer.on('call', (call) => {
-                call.answer();
+                call.answer(); 
                 call.on('stream', (stream) => {
-                    const v = document.getElementById('remote-video');
-                    v.srcObject = stream;
-                    v.play();
+                    const video = document.getElementById('remote-video');
+                    video.srcObject = stream;
+                    
+                    // IMPORTANTE: Forzar play si el navegador lo pausa
+                    video.onloadedmetadata = () => {
+                        video.play().catch(e => console.log("Auto-play prevenido, esperando clic"));
+                    };
                 });
             });
         });
-    }
 
-    function toggleView() {
-        const body = document.body;
-        const btn = document.getElementById('switch-btn');
-        
-        if (currentMode === 'vendedor') {
-            body.classList.replace('view-active-video', 'view-active-shop');
-            btn.textContent = "Ver al Vendedor";
-            currentMode = 'cliente';
-        } else {
-            body.classList.replace('view-active-shop', 'view-active-video');
-            btn.textContent = "Ver mi navegación";
-            currentMode = 'vendedor';
-        }
+        peer.on('error', err => {
+            console.error(err);
+            alert("Error de conexión. Reintenta.");
+        });
     }
 </script>
 </body>

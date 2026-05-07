@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+    <title>Live Shopping — Easylink</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        :root { --lime: #c8f03a; --bg: #0a0a0a; --t: rgba(255,255,255,.92); }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { width: 100%; height: 100%; background: var(--bg); font-family: sans-serif; overflow: hidden; color: var(--t); }
+
+        /* TIENDA */
+        #tienda-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: none; z-index: 1; background: #fff; }
+
+        /* VIDEO (EL MOTOR ESTABLE) */
+        #vid-container {
+            position: fixed; top: 15px; right: 15px;
+            width: 110px; height: 195px; border-radius: 14px;
+            overflow: hidden; z-index: 1000;
+            border: 2px solid var(--lime); background: #000;
+            display: none; box-shadow: 0 8px 30px rgba(0,0,0,0.8);
+            transition: all 0.4s ease; cursor: pointer;
+        }
+        #vid-container.fs { top: 0; right: 0; width: 100vw; height: 100vh; border-radius: 0; border: none; }
+        video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+
+        /* INTERFAZ DE ENTRADA */
+        #waiting {
+            position: fixed; inset: 0; z-index: 2000;
+            background: var(--bg); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        #btn-join {
+            padding: 20px 40px; border: none; border-radius: 12px;
+            background: var(--lime); color: #000; font-weight: 800;
+            font-size: 16px; cursor: pointer; box-shadow: 0 0 20px var(--lime);
+        }
+        .tag { position: absolute; top: 8px; left: 8px; background: #ef4444; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <iframe id="tienda-frame" src="about:blank"></iframe>
+
+    <div id="waiting">
+        <h1 style="color: var(--lime); margin-bottom: 20px; letter-spacing: 2px;">EASYLINK</h1>
+        <button id="btn-join" onclick="initLive()">UNIRSE AL LIVE</button>
+        <p style="margin-top: 15px; opacity: 0.5; font-size: 12px;">Toca para conectar con el vendedor</p>
+    </div>
+
+    <div id="vid-container" onclick="toggleFS()">
+        <div class="tag">EN VIVO</div>
+        <video id="remote-video" autoplay playsinline muted></video>
+    </div>
+
+<script>
+    const params = new URLSearchParams(location.search);
+    const HOST_ID = params.get('host');
+    const STORE = params.get('url');
+
+    if(STORE) document.getElementById('tienda-frame').src = STORE;
+
+    function toggleFS() {
+        const c = document.getElementById('vid-container');
+        const v = document.getElementById('remote-video');
+        c.classList.toggle('fs');
+        v.muted = false; // El audio se activa al interactuar
+    }
+
+    function initLive() {
+        if(!HOST_ID) return alert("Falta ID de conexión");
+        
+        document.getElementById('waiting').style.display = 'none';
+        document.getElementById('vid-container').style.display = 'block';
+
+        // MOTOR SIMPLE Y DOMINANTE
+        const peer = new Peer({
+            config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] }
+        });
+
+        peer.on('open', (id) => {
+            // Solo escuchamos la llamada, no enviamos data innecesaria que rompa el socket
+            peer.on('call', (call) => {
+                call.answer();
+                call.on('stream', (stream) => {
+                    const vid = document.getElementById('remote-video');
+                    vid.srcObject = stream;
+                    vid.play().catch(() => {
+                        vid.muted = true;
+                        vid.play();
+                    });
+                });
+            });
+        });
+
+        peer.on('error', (err) => {
+            console.error(err);
+            alert("Reintentando conexión...");
+            location.reload();
+        });
+    }
+</script>
+</body>
+</html>

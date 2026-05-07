@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transmisor Pro — PC a Celular</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        :root { --primary: #a3e635; --bg: #0f172a; }
+        body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        
+        .card { background: #1e293b; padding: 2rem; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); text-align: center; width: 90%; max-width: 400px; border: 1px solid rgba(255,255,255,0.1); }
+        
+        .status-module { margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: bold; text-transform: uppercase; font-size: 0.8rem; }
+        #status-dot { width: 12px; height: 12px; background: #64748b; border-radius: 50%; }
+        #status-dot.active { background: var(--primary); box-shadow: 0 0 15px var(--primary); animation: pulse 1.5s infinite; }
+        
+        #btn-main { background: var(--primary); color: #14532d; border: none; padding: 1rem 2rem; border-radius: 12px; font-weight: 800; font-size: 1.1rem; cursor: pointer; transition: all 0.2s; width: 100%; margin-bottom: 1rem; }
+        #btn-main:disabled { opacity: 0.5; cursor: not-allowed; }
+        #btn-main.live { background: #ef4444; color: white; }
+
+        .link-area { background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 10px; font-family: monospace; font-size: 0.75rem; word-break: break-all; margin-top: 1rem; border: 1px dashed var(--primary); color: var(--primary); display: none; }
+        
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <div class="status-module">
+            <div id="status-dot"></div>
+            <span id="status-text">Iniciando Red...</span>
+        </div>
+
+        <h1 style="margin: 0 0 0.5rem 0; font-size: 1.5rem;">PC Transmisor</h1>
+        <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem;">Compartir pestaña en tiempo real hacia celulares.</p>
+
+        <button id="btn-main" onclick="toggleStream()" disabled>CONECTANDO...</button>
+        
+        <div id="link-section" class="link-area">
+            <div id="link-display">Generando link...</div>
+            <button onclick="copyLink()" style="margin-top:10px; background:transparent; border:1px solid var(--primary); color:var(--primary); padding:4px 8px; border-radius:5px; cursor:pointer;">Copiar Link</button>
+        </div>
+    </div>
+
+<script>
+    // CONFIGURACIÓN
+    const TIENDA_URL = "https://tu-tienda.com"; // La URL que quieres que el receptor cargue
+    const RECEPTOR_FILENAME = "receptor.html"; 
+    
+    let peer, localStream, isLive = false;
+    const connections = {};
+    const btnMain = document.getElementById('btn-main');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const linkSection = document.getElementById('link-section');
+    const linkDisplay = document.getElementById('link-display');
+
+    // Inicializar PeerJS
+    peer = new Peer({
+        config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] }
+    });
+
+    peer.on('open', (id) => {
+        statusText.textContent = "Listo para transmitir";
+        btnMain.disabled = false;
+        btnMain.textContent = "COMPARTIR PESTAÑA";
+        
+        const path = window.location.href.substring(0, window.location.href.lastIndexOf("/") + 1);
+        const fullLink = `${path}${RECEPTOR_FILENAME}?host=${id}`;
+        linkDisplay.textContent = fullLink;
+        linkSection.style.display = 'block';
+    });
+
+    peer.on('connection', (conn) => {
+        connections[conn.peer] = conn;
+        console.log("Celular conectado:", conn.peer);
+        // Si ya estamos transmitiendo, le enviamos el video al que entra
+        if (isLive && localStream) {
+            peer.call(conn.peer, localStream);
+        }
+    });
+
+    async function toggleStream() {
+        if (isLive) {
+            location.reload(); // Detener todo
+            return;
+        }
+
+        try {
+            // CAPTURA DE PESTAÑA REAL
+            localStream = await navigator.mediaDevices.getDisplayMedia({
+                video: { frameRate: { ideal: 15 } }, // 15fps es perfecto para móviles
+                audio: false
+            });
+
+            isLive = true;
+            btnMain.textContent = "DETENER EN VIVO";
+            btnMain.classList.add('live');
+            statusDot.classList.add('active');
+            statusText.textContent = "EN VIVO";
+
+            // Llamar a todos los celulares que ya están esperando
+            Object.keys(connections).forEach(peerId => {
+                peer.call(peerId, localStream);
+            });
+
+            // Si el usuario deja de compartir desde el botón de Chrome
+            localStream.getVideoTracks()[0].onended = () => location.reload();
+
+        } catch (err) {
+            console.error("Error:", err);
+            alert("Para transmitir debes seleccionar una pestaña o ventana.");
+        }
+    }
+
+    function copyLink() {
+        navigator.clipboard.writeText(linkDisplay.textContent);
+        alert("¡Link copiado! Envíalo a tu celular.");
+    }
+</script>
+</body>
+</html>

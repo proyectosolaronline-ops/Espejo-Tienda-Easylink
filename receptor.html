@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Demo en vivo — Easylink</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Inter',system-ui,sans-serif}
+
+/* SOLO ESTO VE EL RECEPTOR — el video del vendedor navegando */
+#live-video{
+  position:fixed;inset:0;
+  width:100%;height:100%;
+  object-fit:contain;
+  background:#000;
+  z-index:1;
+}
+
+/* WAITING */
+#waiting{
+  position:fixed;inset:0;z-index:5;
+  background:#0a0a0a;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:16px;padding:32px;text-align:center;
+}
+#waiting.hidden{display:none}
+.logo-mark{
+  width:64px;height:64px;border-radius:16px;
+  background:rgba(163,230,53,.1);border:2px solid rgba(163,230,53,.25);
+  display:flex;align-items:center;justify-content:center;margin-bottom:4px;
+}
+#waiting h1{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em}
+#waiting-msg{font-size:13px;color:rgba(255,255,255,.4);line-height:1.7;max-width:260px}
+.spinner-ring{
+  width:44px;height:44px;
+  border:3px solid rgba(163,230,53,.12);
+  border-top-color:#a3e635;
+  border-radius:50%;animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+#connect-status{font-size:11px;font-weight:600;color:rgba(255,255,255,.25);letter-spacing:.08em;text-transform:uppercase;}
+#error-box{
+  display:none;flex-direction:column;align-items:center;gap:12px;
+  padding:20px 24px;
+  background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);
+  border-radius:16px;max-width:280px;width:100%;
+}
+#error-box.on{display:flex}
+#error-msg{font-size:13px;color:rgba(255,255,255,.5);text-align:center;line-height:1.6}
+#btn-retry{padding:10px 24px;background:#ef4444;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;}
+
+/* TOP BAR */
+#top-bar{
+  position:fixed;top:0;left:0;right:0;z-index:10;
+  padding:10px 14px;
+  display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 100%);
+  pointer-events:none;opacity:0;transition:opacity .3s;
+}
+#top-bar.on{opacity:1;pointer-events:all}
+#logo-label{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:#a3e635;letter-spacing:.04em;}
+#live-pill{
+  display:flex;align-items:center;gap:5px;
+  background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);
+  padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700;color:#ef4444;
+}
+#live-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}50%{box-shadow:0 0 0 5px rgba(239,68,68,0)}}
+
+/* BOTTOM BAR */
+#bottom-bar{
+  position:fixed;bottom:0;left:0;right:0;z-index:10;
+  padding:10px 14px 20px;
+  background:linear-gradient(to top,rgba(0,0,0,.75) 0%,transparent 100%);
+  display:flex;align-items:center;justify-content:space-between;
+  opacity:0;transition:opacity .3s;
+}
+#bottom-bar.on{opacity:1}
+#quality-info{font-size:11px;color:rgba(255,255,255,.35);font-weight:500}
+#btn-tienda{
+  display:flex;align-items:center;gap:6px;
+  padding:9px 16px;background:#25d366;color:#fff;
+  border:none;border-radius:10px;font-size:12px;font-weight:700;
+  font-family:inherit;cursor:pointer;
+}
+
+#toast{
+  position:fixed;top:16px;left:50%;transform:translateX(-50%);
+  background:#a3e635;color:#14532d;font-size:12px;font-weight:700;
+  padding:8px 18px;border-radius:99px;z-index:200;display:none;white-space:nowrap;
+}
+#tap-hint{
+  position:fixed;bottom:68px;left:50%;transform:translateX(-50%);
+  font-size:11px;color:rgba(255,255,255,.25);z-index:9;
+  white-space:nowrap;opacity:1;transition:opacity 1s;pointer-events:none;
+}
+#tap-hint.gone{opacity:0}
+</style>
+</head>
+<body>
+
+<!-- SOLO VIDEO — exactamente lo que navega el vendedor -->
+<video id="live-video" autoplay playsinline muted></video>
+
+<div id="top-bar">
+  <div id="logo-label">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="#a3e635"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+    EASYLINK DEMO
+  </div>
+  <div id="live-pill"><div id="live-dot"></div>EN VIVO</div>
+</div>
+
+<div id="bottom-bar">
+  <span id="quality-info">En vivo</span>
+  <button id="btn-tienda" onclick="abrirTienda()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96C5 16.1 6.1 17 6.1 17H19v-2H6.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63H15c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0019.5 4H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+    Ir a la tienda
+  </button>
+</div>
+
+<div id="waiting">
+  <div class="logo-mark">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="#a3e635"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+  </div>
+  <h1>Demo en vivo</h1>
+  <p id="waiting-msg">Conectando con el vendedor...</p>
+  <div class="spinner-ring" id="spinner"></div>
+  <div id="connect-status">Conexión segura WebRTC</div>
+  <div id="error-box">
+    <p id="error-msg">No se pudo conectar.</p>
+    <button id="btn-retry" onclick="location.reload()">Reintentar</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="tap-hint">Toca para mostrar controles</div>
+
+<script>
+var params    = new URLSearchParams(location.search);
+var HOST_ID   = params.get('host') || '';
+var tiendaURL = params.get('url')  || '';
+
+var ICE = [
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun1.l.google.com:19302'},
+  {urls:'turn:a.relay.metered.ca:80',  username:'open',credential:'open'},
+  {urls:'turn:a.relay.metered.ca:443', username:'open',credential:'open'},
+  {urls:'turn:a.relay.metered.ca:443?transport=tcp',username:'open',credential:'open'}
+];
+
+var peer, myConn, myCall;
+var uiVisible = false, uiTimer = null;
+var streamActive = false, retryTimer = null;
+
+if(!HOST_ID){
+  showError('Link inválido. Pide al vendedor que reenvíe el link.');
+  throw new Error('no host');
+}
+
+function initPeer(){
+  setWaiting('Conectando...', false);
+  peer = new Peer({ debug:0, config:{ iceServers:ICE, iceCandidatePoolSize:10 } });
+
+  peer.on('open', function(){ connectToHost(); });
+
+  /* Recibir video del vendedor navegando la tienda */
+  peer.on('call', function(call){
+    call.answer(); // sin cámara, sin mic
+    myCall = call;
+
+    call.on('stream', function(remoteStream){
+      var vid = document.getElementById('live-video');
+      remoteStream.getAudioTracks().forEach(function(t){ t.enabled = false; });
+      vid.srcObject = remoteStream;
+      vid.play().catch(function(){});
+      streamActive = true;
+      document.getElementById('waiting').classList.add('hidden');
+      showUI(true);
+      showToast('En vivo ✓');
+    });
+
+    call.on('close', function(){
+      streamActive = false;
+      document.getElementById('live-video').srcObject = null;
+      document.getElementById('waiting').classList.remove('hidden');
+      hideUI();
+      setWaiting('El vendedor pausó la transmisión.', false);
+    });
+
+    call.on('error', function(e){ console.warn('call error:', e); });
+  });
+
+  peer.on('error', function(e){
+    if(e.type === 'peer-unavailable'){
+      showError('El vendedor no está disponible. Pide que reenvíe el link.');
+    } else {
+      setWaiting('Reconectando...', false);
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(function(){ try{peer.destroy();}catch(x){} initPeer(); }, 4000);
+    }
+  });
+}
+
+function connectToHost(){
+  setWaiting('Buscando al vendedor...', false);
+  myConn = peer.connect(HOST_ID, { reliable:true, serialization:'json' });
+
+  myConn.on('open', function(){
+    setWaiting('Esperando transmisión...', false);
+    myConn.send({ type: 'viewer-ready' });
+  });
+
+  myConn.on('data', function(d){
+    if(d && d.type === 'store-url' && d.url) tiendaURL = d.url;
+  });
+
+  myConn.on('close', function(){
+    if(streamActive) showToast('El vendedor cerró la sesión');
+    streamActive = false;
+    setWaiting('Reconectando con el vendedor...', false);
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(connectToHost, 4000);
+  });
+
+  myConn.on('error', function(){
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(connectToHost, 4000);
+  });
+}
+
+function showUI(force){
+  uiVisible = true;
+  document.getElementById('top-bar').classList.add('on');
+  document.getElementById('bottom-bar').classList.add('on');
+  document.getElementById('tap-hint').classList.add('gone');
+  clearTimeout(uiTimer);
+  if(!force) uiTimer = setTimeout(hideUI, 4000);
+}
+function hideUI(){
+  uiVisible = false;
+  document.getElementById('top-bar').classList.remove('on');
+  document.getElementById('bottom-bar').classList.remove('on');
+}
+
+document.getElementById('live-video').addEventListener('click', function(){ uiVisible ? hideUI() : showUI(); });
+document.getElementById('live-video').addEventListener('touchstart', function(){ uiVisible ? hideUI() : showUI(); },{passive:true});
+
+function setWaiting(msg, isError){
+  document.getElementById('waiting-msg').textContent = msg;
+  document.getElementById('spinner').style.display        = isError ? 'none' : 'block';
+  document.getElementById('connect-status').style.display = isError ? 'none' : 'block';
+  document.getElementById('error-box').classList.toggle('on', isError);
+}
+function showError(msg){
+  document.getElementById('error-msg').textContent = msg;
+  setWaiting(msg, true);
+}
+function abrirTienda(){
+  if(tiendaURL) window.open(tiendaURL, '_blank');
+  else showToast('URL no disponible');
+}
+function showToast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._t); t._t = setTimeout(function(){ t.style.display='none'; }, 2800);
+}
+
+initPeer();
+</script>
+</body>
+</html>

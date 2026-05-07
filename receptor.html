@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Live Shopping - Pro Receptor</title>
+    <title>Live Shopping - Easylink</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
-        :root { --primary: #a3e635; --dark: #000; }
+        :root { --primary: #a3e635; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body, html { 
             width: 100%; height: 100%; 
-            background: var(--dark); overflow: hidden; 
+            background: #000; overflow: hidden; 
             font-family: -apple-system, system-ui, sans-serif;
         }
 
@@ -23,71 +23,59 @@
             background: #fff;
         }
 
-        /* CONTENEDOR DUAL (Miniatura / Maximizado) */
+        /* CONTENEDOR DE VIDEO: FLOTANTE Y MAXIMIZABLE */
         #video-container {
             position: absolute;
-            top: 20px; right: 15px;
-            width: 130px; height: 230px; /* Tamaño miniatura */
-            border-radius: 16px;
+            top: 15px; right: 15px;
+            width: 110px; height: 195px; /* Proporción móvil */
+            border-radius: 12px;
             overflow: hidden;
-            z-index: 1000;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            z-index: 1000; /* Siempre por encima del iframe */
+            box-shadow: 0 8px 30px rgba(0,0,0,0.7);
             border: 2px solid var(--primary);
-            background: #000;
+            background: #111;
             display: none;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             cursor: pointer;
         }
 
-        /* CLASE PARA MAXIMIZAR */
+        /* ESTADO MAXIMIZADO */
         #video-container.fullscreen {
             top: 0; right: 0;
-            width: 100% !important;
-            height: 100% !important;
+            width: 100vw !important;
+            height: 100vh !important;
             border-radius: 0;
             border: none;
         }
         
         video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 
-        /* OVERLAYS */
+        /* BOTÓN DE ACCESO */
         #btn-join {
             position: fixed; inset: 0; margin: auto;
-            width: 150px; height: 150px; border-radius: 50%;
+            width: 140px; height: 140px; border-radius: 50%;
             background: var(--primary); border: none; color: #064e3b;
-            font-weight: 800; z-index: 2000; box-shadow: 0 0 40px var(--primary);
-            cursor: pointer;
+            font-weight: 800; z-index: 2000; 
+            box-shadow: 0 0 40px var(--primary);
         }
 
-        .live-tag {
-            position: absolute; top: 10px; left: 10px;
+        .tag {
+            position: absolute; top: 8px; left: 8px;
             background: #ef4444; color: white;
-            padding: 4px 10px; border-radius: 6px;
-            font-size: 11px; font-weight: bold; z-index: 10;
-        }
-
-        /* BOTÓN DE "VER TIENDA" CUANDO ESTÁ MAXIMIZADO */
-        #btn-minimize {
-            position: absolute; bottom: 30px; left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-            color: white; border: 1px solid white;
-            padding: 10px 20px; border-radius: 30px;
-            display: none; font-size: 14px;
+            padding: 2px 8px; border-radius: 4px;
+            font-size: 10px; font-weight: bold;
         }
     </style>
 </head>
 <body>
 
-    <button id="btn-join" onclick="startWebApp()">ENTRAR AL LIVE</button>
+    <button id="btn-join" onclick="initLive()">UNIRSE AL LIVE</button>
 
     <iframe id="tienda-iframe" src="about:blank"></iframe>
 
-    <div id="video-container" onclick="toggleView()">
-        <div class="live-tag">EN VIVO</div>
+    <div id="video-container" onclick="toggleSize()">
+        <div class="tag">VIVO</div>
         <video id="remote-video" autoplay playsinline muted></video>
-        <div id="btn-minimize">Toca para navegar en la tienda</div>
     </div>
 
 <script>
@@ -95,23 +83,20 @@
     const hostId = params.get('host');
     const tiendaUrl = params.get('url');
 
+    // Cargar tienda de inmediato
     if(tiendaUrl) document.getElementById('tienda-iframe').src = tiendaUrl;
 
     const container = document.getElementById('video-container');
-    const miniBtn = document.getElementById('btn-minimize');
+    const video = document.getElementById('remote-video');
 
-    function toggleView() {
+    function toggleSize() {
         container.classList.toggle('fullscreen');
-        // Mostrar/ocultar el texto de ayuda solo en pantalla completa
-        miniBtn.style.display = container.classList.contains('fullscreen') ? 'block' : 'none';
-        
-        // Al interactuar, intentamos asegurar que el audio se active
-        const video = document.getElementById('remote-video');
+        // Al interactuar, quitamos el mute para que el audio funcione
         video.muted = false;
     }
 
-    function startWebApp() {
-        if (!hostId) return alert("Falta el ID del transmisor");
+    function initLive() {
+        if (!hostId) return alert("ID de host no encontrado");
         
         document.getElementById('btn-join').style.display = 'none';
         container.style.display = 'block';
@@ -126,17 +111,14 @@
             peer.on('call', (call) => {
                 call.answer();
                 call.on('stream', (stream) => {
-                    const video = document.getElementById('remote-video');
                     video.srcObject = stream;
                     
-                    // IMPORTANTE: Manejo de autoplay en móviles
-                    let playPromise = video.play();
-                    if (playPromise !== undefined) {
-                        playPromise.catch(() => {
-                            video.muted = true;
-                            video.play();
-                        });
-                    }
+                    // INTENTO DE PLAY FORZADO
+                    video.play().catch(() => {
+                        // Si el navegador bloquea, silenciamos y reintentamos
+                        video.muted = true;
+                        video.play();
+                    });
                 });
             });
         });

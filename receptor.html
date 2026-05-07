@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Live Shopping - Pro Receptor</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        :root { --primary: #a3e635; --dark: #000; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body, html { 
+            width: 100%; height: 100%; 
+            background: var(--dark); overflow: hidden; 
+            font-family: -apple-system, system-ui, sans-serif;
+        }
+
+        /* TIENDA DE FONDO */
+        #tienda-iframe {
+            position: absolute; inset: 0;
+            width: 100%; height: 100%;
+            border: none; z-index: 1;
+            background: #fff;
+        }
+
+        /* CONTENEDOR DUAL (Miniatura / Maximizado) */
+        #video-container {
+            position: absolute;
+            top: 20px; right: 15px;
+            width: 130px; height: 230px; /* Tamaño miniatura */
+            border-radius: 16px;
+            overflow: hidden;
+            z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            border: 2px solid var(--primary);
+            background: #000;
+            display: none;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+        }
+
+        /* CLASE PARA MAXIMIZAR */
+        #video-container.fullscreen {
+            top: 0; right: 0;
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 0;
+            border: none;
+        }
+        
+        video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+
+        /* OVERLAYS */
+        #btn-join {
+            position: fixed; inset: 0; margin: auto;
+            width: 150px; height: 150px; border-radius: 50%;
+            background: var(--primary); border: none; color: #064e3b;
+            font-weight: 800; z-index: 2000; box-shadow: 0 0 40px var(--primary);
+            cursor: pointer;
+        }
+
+        .live-tag {
+            position: absolute; top: 10px; left: 10px;
+            background: #ef4444; color: white;
+            padding: 4px 10px; border-radius: 6px;
+            font-size: 11px; font-weight: bold; z-index: 10;
+        }
+
+        /* BOTÓN DE "VER TIENDA" CUANDO ESTÁ MAXIMIZADO */
+        #btn-minimize {
+            position: absolute; bottom: 30px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            color: white; border: 1px solid white;
+            padding: 10px 20px; border-radius: 30px;
+            display: none; font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="btn-join" onclick="startWebApp()">ENTRAR AL LIVE</button>
+
+    <iframe id="tienda-iframe" src="about:blank"></iframe>
+
+    <div id="video-container" onclick="toggleView()">
+        <div class="live-tag">EN VIVO</div>
+        <video id="remote-video" autoplay playsinline muted></video>
+        <div id="btn-minimize">Toca para navegar en la tienda</div>
+    </div>
+
+<script>
+    const params = new URLSearchParams(window.location.search);
+    const hostId = params.get('host');
+    const tiendaUrl = params.get('url');
+
+    if(tiendaUrl) document.getElementById('tienda-iframe').src = tiendaUrl;
+
+    const container = document.getElementById('video-container');
+    const miniBtn = document.getElementById('btn-minimize');
+
+    function toggleView() {
+        container.classList.toggle('fullscreen');
+        // Mostrar/ocultar el texto de ayuda solo en pantalla completa
+        miniBtn.style.display = container.classList.contains('fullscreen') ? 'block' : 'none';
+        
+        // Al interactuar, intentamos asegurar que el audio se active
+        const video = document.getElementById('remote-video');
+        video.muted = false;
+    }
+
+    function startWebApp() {
+        if (!hostId) return alert("Falta el ID del transmisor");
+        
+        document.getElementById('btn-join').style.display = 'none';
+        container.style.display = 'block';
+
+        const peer = new Peer({
+            config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] }
+        });
+
+        peer.on('open', () => {
+            const conn = peer.connect(hostId);
+            
+            peer.on('call', (call) => {
+                call.answer();
+                call.on('stream', (stream) => {
+                    const video = document.getElementById('remote-video');
+                    video.srcObject = stream;
+                    
+                    // IMPORTANTE: Manejo de autoplay en móviles
+                    let playPromise = video.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(() => {
+                            video.muted = true;
+                            video.play();
+                        });
+                    }
+                });
+            });
+        });
+    }
+</script>
+</body>
+</html>
